@@ -52,14 +52,25 @@ pids
 coverage/
 *.lcov
 
-# Electron
+# Electron build outputs - 不推送构建产物
 /release/
 /app/dist/
 /dist_electron/
+/dist-electron/
 
-# Windows executable
+# Windows executable and packages - 不推送打包文件
 *.exe
 *.msi
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.AppImage
+
+# Build release directories - 不推送发布目录
+Windows_Release_*/
+Windows_兼容版_*/
+Release_*/
 
 # macOS
 .AppleDouble
@@ -71,4 +82,9 @@ coverage/
 
 # Temporary files
 .tmp/
-.temp/ 
+.temp/
+
+# 不推送构建和打包相关的临时文件
+build/
+out/
+app-builds/ 
