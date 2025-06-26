@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  
+  /* 科技风格滚动条 */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #1a1a1a;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #00f5ff, #8b5cf6);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #00d4ff, #7c3aed);
+  }
+}
+
+@layer components {
+  .cyber-button {
+    @apply px-6 py-3 bg-transparent border border-cyber-blue text-cyber-blue 
+           rounded-lg font-medium transition-all duration-300 
+           hover:bg-cyber-blue hover:text-black hover:shadow-cyber
+           focus:outline-none focus:ring-2 focus:ring-cyber-blue focus:ring-opacity-50;
+  }
+  
+  .cyber-input {
+    @apply bg-cyber-gray border border-cyber-light-gray text-white px-4 py-3 
+           rounded-lg focus:border-cyber-blue focus:outline-none focus:ring-2 
+           focus:ring-cyber-blue focus:ring-opacity-50 transition-all duration-300;
+  }
+  
+  .cyber-card {
+    @apply bg-cyber-gray border border-cyber-light-gray rounded-xl p-6 
+           shadow-lg backdrop-blur-sm transition-all duration-300
+           hover:border-cyber-blue hover:shadow-cyber;
+  }
+  
+  .cyber-glow {
+    @apply animate-glow;
+  }
+  
+  .loading-dots::after {
+    content: '';
+    animation: loading-dots 1.5s steps(4, end) infinite;
+  }
+}
+
+@keyframes loading-dots {
+  0%, 20% { content: ''; }
+  40% { content: '.'; }
+  60% { content: '..'; }
+  80%, 100% { content: '...'; }
+}
+
+/* Leaflet地图样式覆盖 */
+.leaflet-container {
+  background: #1a1a1a;
+  font-family: 'Inter', sans-serif;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #2a2a2a;
+  color: white;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+}
+
+.leaflet-popup-tip {
+  background: #2a2a2a;
+}
+
+.leaflet-control-zoom a {
+  background: #2a2a2a;
+  color: #00f5ff;
+  border: 1px solid #3a3a3a;
+}
+
+.leaflet-control-zoom a:hover {
+  background: #3a3a3a;
+  color: #00d4ff;
+}
+
+/* FSA地图专用样式 */
+.fsa-tooltip {
+  background: rgba(30, 41, 59, 0.95) !important;
+  border: 1px solid #3B82F6 !important;
+  border-radius: 8px !important;
+  color: white !important;
+  font-weight: 500 !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.fsa-tooltip::before {
+  border-top-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+/* 地图弹窗增强样式 */
+.leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+}
+
+.leaflet-popup-content {
+  margin: 16px !important;
+}
+
+/* 自定义慢速脉动动画 */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+} 

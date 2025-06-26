@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns:fme="http://www.safe.com/gml/fme" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.safe.com/gml/fme" elementFormDefault="qualified">
+<import namespace="http://www.opengis.net/gml" schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/gml.xsd"/>
+<element name="lfsa000a21g_e" type="fme:lfsa000a21g_eType" substitutionGroup="gml:_Feature"/>
+<complexType name="lfsa000a21g_eType">
+<complexContent>
+<extension base="gml:AbstractFeatureType">
+<sequence>
+<element name="CFSAUID" minOccurs="0">
+<simpleType>
+<restriction base="string">
+<maxLength value="3"/>
+</restriction>
+</simpleType></element>
+<element name="DGUID" minOccurs="0">
+<simpleType>
+<restriction base="string">
+<maxLength value="21"/>
+</restriction>
+</simpleType></element>
+<element name="PRUID" minOccurs="0">
+<simpleType>
+<restriction base="string">
+<maxLength value="2"/>
+</restriction>
+</simpleType></element>
+<element name="PRNAME" minOccurs="0">
+<simpleType>
+<restriction base="string">
+<maxLength value="55"/>
+</restriction>
+</simpleType></element>
+<element name="LANDAREA" minOccurs="0" type="double"/>
+<element ref="gml:surfaceProperty" minOccurs="0"/>
+<element ref="gml:multiSurfaceProperty" minOccurs="0"/>
+</sequence>
+</extension>
+</complexContent>
+</complexType>
+</schema>

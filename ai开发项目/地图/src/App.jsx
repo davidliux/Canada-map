@@ -1,0 +1,270 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Truck, Zap, Globe, Settings, Bell, User, Database } from 'lucide-react';
+import EnhancedSearchPanel from './components/EnhancedSearchPanel';
+import EnhancedStatsPanel from './components/EnhancedStatsPanel';
+import AccurateFSAMap from './components/AccurateFSAMap';
+import EnhancedFSAManager from './components/FSAManager';
+
+function App() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProvince, setSelectedProvince] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [showFSAManager, setShowFSAManager] = useState(false);
+  const [deliverableFSAs, setDeliverableFSAs] = useState([]);
+
+  useEffect(() => {
+    // 模拟系统启动
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-cyber-dark flex items-center justify-center">
+        <motion.div 
+          className="text-center"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <motion.div
+            className="w-24 h-24 border-4 border-cyber-blue border-t-transparent rounded-full mx-auto mb-6"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+          <h2 className="text-3xl font-bold text-cyber-blue mb-4">
+            加拿大快递配送系统
+          </h2>
+          <p className="text-gray-400 text-lg">
+            正在启动智能配送区域管理平台<span className="loading-dots"></span>
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-4 text-sm text-gray-500">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-cyber-green rounded-full animate-pulse"></div>
+              <span>系统初始化</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-cyber-blue rounded-full animate-pulse"></div>
+              <span>加载FSA数据</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-cyber-purple rounded-full animate-pulse"></div>
+              <span>连接地图服务</span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-cyber-dark">
+      {/* 增强版顶部导航栏 */}
+      <motion.header 
+        className="bg-cyber-gray/80 backdrop-blur-md border-b border-cyber-blue/30 sticky top-0 z-50 shadow-lg"
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <motion.div 
+                className="flex items-center gap-3"
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <div className="p-3 bg-gradient-to-br from-cyber-blue/20 to-cyber-purple/20 rounded-xl">
+                  <Truck className="w-8 h-8 text-cyber-blue" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">
+                    加拿大快递配送系统
+                  </h1>
+                  <p className="text-sm text-gray-400">
+                    智能配送区域管理平台 v2.0
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              {/* 实时状态指示器 */}
+              <motion.div 
+                className="flex items-center gap-3 px-4 py-2 bg-cyber-green/20 rounded-xl border border-cyber-green/30"
+                animate={{ 
+                  boxShadow: [
+                    '0 0 5px rgba(16, 185, 129, 0.3)',
+                    '0 0 20px rgba(16, 185, 129, 0.6)',
+                    '0 0 5px rgba(16, 185, 129, 0.3)'
+                  ]
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <div className="w-3 h-3 bg-cyber-green rounded-full animate-pulse"></div>
+                <span className="text-cyber-green text-sm font-medium">系统在线</span>
+                <span className="text-cyber-green/70 text-xs">99.9%</span>
+              </motion.div>
+              
+              {/* 操作按钮 */}
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    console.log('邮编管理按钮被点击，当前状态:', showFSAManager);
+                    setShowFSAManager(!showFSAManager);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                    showFSAManager 
+                      ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/30' 
+                      : 'text-gray-400 hover:text-cyber-green hover:bg-cyber-green/10'
+                  }`}
+                  title="邮编管理"
+                >
+                  <Database className="w-5 h-5" />
+                  <span className="hidden sm:inline text-sm">邮编管理</span>
+                  {showFSAManager && <span className="text-xs ml-1">●</span>}
+                </button>
+                
+                <button className="p-2 text-gray-400 hover:text-cyber-blue transition-colors relative">
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-cyber-blue rounded-full text-xs"></span>
+                </button>
+                
+                <button className="p-2 text-gray-400 hover:text-cyber-blue transition-colors">
+                  <User className="w-5 h-5" />
+                </button>
+                
+                <button className="p-2 text-gray-400 hover:text-cyber-blue transition-colors">
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.header>
+
+      <div className="container mx-auto px-6 py-8">
+        {/* 增强版统计面板 */}
+        <EnhancedStatsPanel />
+        
+        {/* FSA邮编管理面板 */}
+        {console.log('渲染时 showFSAManager 状态:', showFSAManager)}
+        {showFSAManager && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-8"
+          >
+            <EnhancedFSAManager 
+              onDataChange={setDeliverableFSAs}
+            />
+          </motion.div>
+        )}
+        
+        {/* 调试信息 */}
+        {showFSAManager && (
+          <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-yellow-300 text-sm">
+            🔧 调试: FSAManager 应该在这里显示 (showFSAManager = {String(showFSAManager)})
+          </div>
+        )}
+        
+        {/* 主要内容区域 */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          {/* 左侧控制面板 */}
+          <div className="xl:col-span-4">
+            <EnhancedSearchPanel
+              onSearch={setSearchQuery}
+              onProvinceChange={setSelectedProvince}
+              selectedProvince={selectedProvince}
+            />
+          </div>
+
+          {/* 右侧地图区域 */}
+          <div className="xl:col-span-8">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="h-[700px]"
+            >
+              <AccurateFSAMap 
+                searchQuery={searchQuery} 
+                selectedProvince={selectedProvince}
+                deliverableFSAs={deliverableFSAs}
+              />
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
+      {/* 增强版底部状态栏 */}
+      <motion.footer 
+        className="bg-cyber-gray/50 backdrop-blur-sm border-t border-cyber-blue/30 mt-12"
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+      >
+        <div className="container mx-auto px-6 py-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 系统信息 */}
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-cyber-blue/20 rounded-lg">
+                <Zap className="w-5 h-5 text-cyber-blue" />
+              </div>
+              <div>
+                <div className="text-white font-medium">系统版本</div>
+                <div className="text-gray-400 text-sm">v2.0.0 - 增强版</div>
+              </div>
+            </div>
+
+            {/* 服务状态 */}
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-cyber-green/20 rounded-lg">
+                <Globe className="w-5 h-5 text-cyber-green" />
+              </div>
+              <div>
+                <div className="text-white font-medium">服务区域</div>
+                <div className="text-gray-400 text-sm">加拿大全境 • 实时覆盖</div>
+              </div>
+            </div>
+
+            {/* 数据源 */}
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-cyber-purple/20 rounded-lg">
+                <Settings className="w-5 h-5 text-cyber-purple" />
+              </div>
+              <div>
+                <div className="text-white font-medium">数据源</div>
+                <div className="text-gray-400 text-sm">Statistics Canada 2021</div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="border-t border-cyber-light-gray mt-6 pt-4 text-center">
+            <p className="text-gray-400 text-sm">
+              © 2024 加拿大快递配送系统. 智能配送区域管理平台 - 保留所有权利.
+            </p>
+          </div>
+        </div>
+      </motion.footer>
+
+      {/* 科技风格背景效果 */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        {/* 动态背景圆圈 */}
+        <div className="absolute top-20 left-20 w-96 h-96 bg-cyber-blue/3 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-20 w-[500px] h-[500px] bg-cyber-purple/3 rounded-full blur-3xl animate-pulse-slow" style={{animationDelay: '1s'}}></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-cyber-green/3 rounded-full blur-2xl animate-pulse-slow" style={{animationDelay: '2s'}}></div>
+        
+        {/* 网格背景 */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
+      </div>
+    </div>
+  );
+}
+
+export default App; 
