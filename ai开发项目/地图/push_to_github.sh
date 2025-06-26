@@ -2,6 +2,7 @@
 
 echo "🚀 加拿大快递配送系统 - GitHub推送脚本"
 echo "================================================"
+echo "📋 仅推送源代码，不包含构建产物"
 
 # 测试SSH连接
 echo "📡 测试GitHub SSH连接..."
@@ -17,21 +18,40 @@ else
     exit 1
 fi
 
+# 显示即将推送的内容
+echo ""
+echo "📦 即将推送的内容:"
+echo "   ✅ React源代码 (src/目录)"
+echo "   ✅ 项目配置文件 (package.json, vite.config.js等)"
+echo "   ✅ 数据文件 (806个FSA数据)"
+echo "   ✅ 构建脚本 (build_windows_app.sh)"
+echo "   ✅ 文档文件 (README.md等)"
+echo ""
+echo "   ❌ 不推送: dist-electron/ (构建产物)"
+echo "   ❌ 不推送: *.exe (打包文件)"
+echo "   ❌ 不推送: node_modules/ (依赖)"
+
 # 推送到GitHub
 echo ""
-echo "📤 推送代码到GitHub..."
+echo "📤 推送源代码到GitHub..."
 git push -u origin main
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "🎉 推送成功！"
+    echo "🎉 源代码推送成功！"
     echo "🌐 项目地址: https://github.com/davidliux/Canada-map"
     echo ""
-    echo "📊 项目统计:"
-    echo "   - 65个文件已推送"
+    echo "📊 项目内容:"
+    echo "   - React + Electron 源代码"
     echo "   - 806个FSA数据区域"
-    echo "   - React + Electron 桌面应用"
-    echo "   - 完整的地图可视化系统"
+    echo "   - Windows构建脚本 (本地使用)"
+    echo "   - 完整的开发文档"
+    echo ""
+    echo "💡 其他人可以:"
+    echo "   1. git clone 获取源代码"
+    echo "   2. npm install 安装依赖"
+    echo "   3. npm run dev 启动开发版本"
+    echo "   4. ./build_windows_app.sh 构建Windows应用"
 else
     echo "❌ 推送失败，请检查网络连接和权限"
 fi 
