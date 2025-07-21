@@ -22,12 +22,16 @@ export const isDevelopment = () => {
 // 检测是否在生产环境
 export const isProduction = () => {
   if (!isBrowser) return false;
-  
+
   const hostname = window.location.hostname;
   const isVercelDomain = hostname.includes('vercel.app') || hostname.includes('canada-map');
   const isViteMode = import.meta.env?.MODE === 'production';
-  
-  return isVercelDomain || isViteMode || !isDevelopment();
+  const isNotLocalhost = !isDevelopment();
+
+  const result = isVercelDomain || isViteMode || isNotLocalhost;
+  console.log('🔧 环境检测 - 生产环境:', result, { hostname, isVercelDomain, isViteMode, isNotLocalhost });
+
+  return result;
 };
 
 // 检测是否强制使用API

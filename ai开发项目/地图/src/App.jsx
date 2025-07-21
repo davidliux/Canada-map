@@ -37,6 +37,7 @@ function App() {
 
   // 检查URL路径，如果是工具页面则显示工具路由
   const [showToolRouter, setShowToolRouter] = useState(false);
+  const [showMigrationPrompt, setShowMigrationPrompt] = useState(false);
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -45,6 +46,30 @@ function App() {
         path === '/test-recovery' || path === '/test-recovery.html') {
       setShowToolRouter(true);
     }
+  }, []);
+
+  // 检查是否需要显示迁移提示
+  useEffect(() => {
+    const checkMigrationNeeded = () => {
+      // 只在生产环境检查
+      const isProduction = window.location.hostname.includes('vercel.app') ||
+                          window.location.hostname.includes('canada-map');
+
+      if (isProduction) {
+        const localData = localStorage.getItem('regionConfigs');
+        if (localData && JSON.parse(localData) && Object.keys(JSON.parse(localData)).length > 0) {
+          // 检查是否已经提示过
+          const hasPrompted = localStorage.getItem('migrationPrompted');
+          if (!hasPrompted) {
+            setShowMigrationPrompt(true);
+            localStorage.setItem('migrationPrompted', 'true');
+          }
+        }
+      }
+    };
+
+    // 延迟检查，确保页面完全加载
+    setTimeout(checkMigrationNeeded, 2000);
   }, []);
 
   useEffect(() => {
@@ -283,14 +308,14 @@ function App() {
 
                 <button
                   onClick={() => setShowMigrationTool(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-blue-400 hover:bg-blue-400/10"
-                  title="数据迁移"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-blue-400 hover:text-blue-300 hover:bg-blue-400/20 border border-blue-400/30 hover:border-blue-400/50"
+                  title="数据迁移 - 将本地数据迁移到云端存储"
                 >
                   <RefreshCw className="w-5 h-5" />
-                  <span className="hidden sm:inline text-sm">数据迁移</span>
+                  <span className="hidden sm:inline text-sm font-medium">数据迁移</span>
                 </button>
 
-                {/* 数据修复按钮已删除 - 使用统一存储架构，不再需要数据迁移 */}
+                {/* 数据迁移工具 - 用于将localStorage数据迁移到Vercel KV存储 */}
 
                 <button className="p-2 text-gray-400 hover:text-cyber-blue transition-colors relative">
                   <Bell className="w-5 h-5" />
@@ -606,6 +631,77 @@ function App() {
             window.history.pushState({}, '', '/');
           }}
         />
+      )}
+
+      {/* 数据迁移提示 */}
+      {showMigrationPrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-gradient-to-br from-blue-900 to-blue-800 border border-blue-500/30 rounded-xl shadow-2xl w-full max-w-2xl"
+          >
+            <div className="flex items-center justify-between p-6 border-b border-blue-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <RefreshCw className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">检测到本地数据</h2>
+                  <p className="text-sm text-blue-200">建议将数据迁移到云端存储</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMigrationPrompt(false)}
+                className="p-2 hover:bg-blue-700 rounded-lg transition-colors text-blue-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-800/50 border border-blue-500/20 rounded-lg p-4">
+                <h3 className="text-blue-200 font-semibold mb-2">🔄 数据迁移建议</h3>
+                <p className="text-blue-100 text-sm mb-3">
+                  我们检测到您的浏览器中存储了配送区域数据。为了确保数据安全和跨设备同步，建议将这些数据迁移到云端存储。
+                </p>
+                <ul className="text-blue-100 text-sm space-y-1 opacity-90">
+                  <li>• 数据将安全存储在Vercel KV数据库中</li>
+                  <li>• 支持跨设备访问和同步</li>
+                  <li>• 避免浏览器清理导致的数据丢失</li>
+                  <li>• 迁移过程安全可靠，原数据保持不变</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowMigrationPrompt(false);
+                    setShowMigrationTool(true);
+                  }}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-lg transition-all font-medium"
+                >
+                  立即迁移数据
+                </button>
+                <button
+                  onClick={() => setShowMigrationPrompt(false)}
+                  className="px-4 py-3 bg-blue-800/50 hover:bg-blue-700/50 text-blue-200 rounded-lg transition-colors"
+                >
+                  稍后提醒
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMigrationPrompt(false);
+                    localStorage.setItem('migrationPrompted', 'dismissed');
+                  }}
+                  className="px-4 py-3 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded-lg transition-colors text-sm"
+                >
+                  不再提示
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       )}
 
       {/* 科技风格背景效果 */}

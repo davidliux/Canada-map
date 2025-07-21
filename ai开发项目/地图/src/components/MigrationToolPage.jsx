@@ -24,6 +24,7 @@ const MigrationToolPage = ({ onClose }) => {
   const [migrationDetails, setMigrationDetails] = useState([]);
 
   useEffect(() => {
+    console.log('🔄 MigrationToolPage 组件已加载');
     checkMigrationStatus();
   }, []);
 

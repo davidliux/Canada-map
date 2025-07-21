@@ -8,6 +8,8 @@ import MigrationToolPage from './MigrationToolPage';
 const ToolPageRouter = ({ onClose }) => {
   const path = window.location.pathname;
 
+  console.log('🔧 ToolPageRouter 激活，当前路径:', path);
+
   // 根据路径决定显示哪个工具
   const renderTool = () => {
     if (path === '/migration-tool' || path === '/migration-tool.html') {
