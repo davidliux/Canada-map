@@ -10,6 +10,12 @@ export default defineConfig({
   build: {
     // 禁用代码分割，将所有代码打包到一个文件中
     rollupOptions: {
+      input: {
+        main: './index.html',
+        migration: './migration-tool.html',
+        recovery: './data-recovery-tool.html',
+        test: './test-recovery.html'
+      },
       output: {
         manualChunks: undefined,
         // 生成单个文件

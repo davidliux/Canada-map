@@ -8,6 +8,10 @@
       "config": {
         "distDir": "dist"
       }
+    },
+    {
+      "src": "public/**/*.html",
+      "use": "@vercel/static"
     }
   ],
   "functions": {
@@ -39,7 +43,7 @@
   ],
   "env": {
     "NODE_ENV": "production",
-    "REACT_APP_USE_API": "true"
+    "VITE_USE_API": "true"
   },
   "headers": [
     {
