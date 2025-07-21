@@ -259,31 +259,34 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         let filtered = mapData.features.map(feature => feature.properties.CFSAUID);
         console.log('📊 地图总FSA数量:', filtered.length);
 
-      // 应用区域筛选（优先级最高）
-      if (selectedRegions.length > 0) {
-        console.log('🎯 应用区域筛选，选中区域:', selectedRegions);
-        const regionFSAs = await getRegionFilteredFSAs();
-        const beforeCount = filtered.length;
-        filtered = filtered.filter(fsa => regionFSAs.includes(fsa));
-        console.log(`📍 区域筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
-      }
+        // 应用区域筛选（优先级最高）
+        if (selectedRegions.length > 0) {
+          console.log('🎯 应用区域筛选，选中区域:', selectedRegions);
+          const regionFSAs = await getRegionFilteredFSAs();
+          const beforeCount = filtered.length;
+          filtered = regionFSAs; // 直接使用区域FSA，不要过滤
+          console.log(`📍 区域筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
+          console.log('📍 区域FSA列表:', filtered);
+        } else {
+          // 没有选择区域时，应用其他筛选条件
 
-      // 应用省份筛选
-      if (selectedProvince !== 'all') {
-        console.log('🌍 应用省份筛选:', selectedProvince);
-        const beforeCount = filtered.length;
-        filtered = filtered.filter(fsa => getProvinceFromFSA(fsa) === selectedProvince);
-        console.log(`🌍 省份筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
-      }
+          // 应用省份筛选
+          if (selectedProvince !== 'all') {
+            console.log('🌍 应用省份筛选:', selectedProvince);
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(fsa => getProvinceFromFSA(fsa) === selectedProvince);
+            console.log(`🌍 省份筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
+          }
 
-      // 应用搜索查询
-      if (searchQuery && searchQuery.trim()) {
-        console.log('🔍 应用搜索查询:', searchQuery);
-        const query = searchQuery.toLowerCase().trim();
-        const beforeCount = filtered.length;
-        filtered = filtered.filter(fsa => fsa.toLowerCase().includes(query));
-        console.log(`🔍 搜索筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
-      }
+          // 应用搜索查询
+          if (searchQuery && searchQuery.trim()) {
+            console.log('🔍 应用搜索查询:', searchQuery);
+            const query = searchQuery.toLowerCase().trim();
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(fsa => fsa.toLowerCase().includes(query));
+            console.log(`🔍 搜索筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
+          }
+        }
 
         console.log('✅ 最终筛选结果:', filtered.length, '个FSA');
         setFilteredFSAs(filtered);
@@ -315,17 +318,30 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   // 样式化每个FSA区域
   const styleFeature = (feature) => {
     const fsaCode = feature.properties.CFSAUID;
-    const isVisible = filteredFSAs.includes(fsaCode);
+    const isSelected = filteredFSAs.includes(fsaCode);
     const color = getProvinceColor(fsaCode);
-    
-    return {
-      fillColor: color,
-      weight: isVisible ? 2 : 1,
-      opacity: isVisible ? 1 : 0.3,
-      color: '#ffffff',
-      fillOpacity: isVisible ? 0.6 : 0.2,
-      className: 'fsa-polygon'
-    };
+
+    // 当有区域选择时，只高亮选中的FSA
+    // 当没有区域选择时，所有FSA都正常显示
+    if (selectedRegions.length > 0) {
+      return {
+        fillColor: isSelected ? color : '#cccccc',
+        weight: isSelected ? 3 : 1,
+        opacity: isSelected ? 1 : 0.3,
+        color: isSelected ? '#ffffff' : '#999999',
+        fillOpacity: isSelected ? 0.7 : 0.1,
+        className: isSelected ? 'fsa-polygon selected' : 'fsa-polygon'
+      };
+    } else {
+      return {
+        fillColor: color,
+        weight: 2,
+        opacity: 1,
+        color: '#ffffff',
+        fillOpacity: 0.6,
+        className: 'fsa-polygon'
+      };
+    }
   };
 
   // 为每个特征添加交互
@@ -501,28 +517,42 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
           
-          {/* 筛选后的数据 */}
+          {/* 地图数据渲染 */}
           {(() => {
-            const filteredData = mapData ? {
+            // 根据筛选条件决定显示的数据
+            let displayData = mapData;
+
+            // 如果没有选择区域，但有其他筛选条件，则筛选数据
+            if (selectedRegions.length === 0 && (selectedProvince !== 'all' || (searchQuery && searchQuery.trim()))) {
+              displayData = mapData ? {
+                type: 'FeatureCollection',
+                features: mapData.features.filter(feature =>
+                  filteredFSAs.includes(feature.properties.CFSAUID)
+                )
+              } : null;
+            }
+
+            // 为缩放控制器准备数据
+            const zoomData = selectedRegions.length > 0 ? {
               type: 'FeatureCollection',
-              features: mapData.features.filter(feature => 
+              features: mapData ? mapData.features.filter(feature =>
                 filteredFSAs.includes(feature.properties.CFSAUID)
-              )
-            } : null;
+              ) : []
+            } : displayData;
 
             return (
               <>
                 {/* 地图控制器 - 处理自动缩放 */}
-                <MapController 
-                  selectedProvince={selectedProvince} 
-                  filteredData={filteredData}
+                <MapController
+                  selectedProvince={selectedProvince}
+                  filteredData={zoomData}
                 />
-                
+
                 {/* 渲染真实的FSA边界 */}
-                {filteredData && (
+                {displayData && (
                   <GeoJSON
-                    key={`geojson-${filteredFSAs.length}-${selectedProvince}`}
-                    data={filteredData}
+                    key={`geojson-${filteredFSAs.length}-${selectedProvince}-${selectedRegions.join(',')}`}
+                    data={displayData}
                     style={styleFeature}
                     onEachFeature={onEachFeature}
                   />

@@ -14,7 +14,7 @@ import {
   FileText
 } from 'lucide-react';
 import { getFSAsByProvince } from '../data/deliverableFSA';
-import { getRegionPostalCodes, getAllRegionConfigs } from '../utils/unifiedStorage';
+import { serverStorage } from '../utils/serverStorage.js';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 
 const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince, onRegionFilter }) => {
@@ -166,12 +166,18 @@ const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince, onR
   /**
    * 更新区域邮编数量缓存
    */
-  const updateRegionPostalCounts = () => {
+  const updateRegionPostalCounts = async () => {
     const counts = {};
     for (let i = 1; i <= 8; i++) {
       const regionId = i.toString();
-      const postalCodes = getRegionPostalCodes(regionId);
-      counts[regionId] = postalCodes.length;
+      try {
+        const regionConfig = await serverStorage.getRegionConfig(regionId);
+        const postalCodes = regionConfig ? regionConfig.postalCodes : [];
+        counts[regionId] = postalCodes.length;
+      } catch (error) {
+        console.error(`获取区域${regionId}邮编数量失败:`, error);
+        counts[regionId] = 0;
+      }
     }
     setRegionPostalCounts(counts);
     console.log('📊 更新区域邮编数量:', counts);

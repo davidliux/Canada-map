@@ -165,26 +165,32 @@ function App() {
   /**
    * 处理区域筛选
    */
-  const handleRegionFilter = (regions) => {
+  const handleRegionFilter = async (regions) => {
     console.log('区域筛选更新:', regions);
     setSelectedRegions(regions);
 
     // 根据选中的区域更新可配送FSA列表
     if (regions.length > 0) {
       const regionFSAs = [];
-      regions.forEach(regionId => {
+      for (const regionId of regions) {
         try {
-          // 使用统一存储架构获取区域邮编
-          const postalCodes = getRegionPostalCodes(regionId);
-          regionFSAs.push(...postalCodes);
+          // 使用服务器存储架构获取区域邮编
+          const regionConfig = await serverStorage.getRegionConfig(regionId);
+          const postalCodes = regionConfig ? regionConfig.postalCodes : [];
+          if (postalCodes && postalCodes.length > 0) {
+            regionFSAs.push(...postalCodes);
+            console.log(`📍 区域${regionId}邮编数据:`, postalCodes.length, '个');
+          }
         } catch (error) {
           console.error(`读取区域 ${regionId} 邮编数据失败:`, error);
         }
-      });
+      }
       setDeliverableFSAs(regionFSAs);
+      console.log('🎯 更新可配送FSA列表:', regionFSAs.length, '个');
     } else {
       // 如果没有选择区域，清空筛选
       setDeliverableFSAs([]);
+      console.log('🔄 清空区域筛选');
     }
   };
 
