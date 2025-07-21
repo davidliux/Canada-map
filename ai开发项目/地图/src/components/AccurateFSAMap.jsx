@@ -8,7 +8,7 @@ import L from 'leaflet';
 // 可配送的FSA列表
 import { deliverableFSAs } from '../data/deliverableFSA.js';
 import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerator.js';
-import { cloudStorage } from '../utils/cloudFirstStorage';
+import { serverStorage } from '../utils/serverStorage';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 import ProvinceAnalyzer from './ProvinceAnalyzer';
 import FixedQuotationPanel from './FixedQuotationPanel';
@@ -234,8 +234,8 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
 
     for (const regionId of selectedRegions) {
       try {
-        // 使用云端优先存储架构获取区域邮编
-        const regionConfig = await cloudStorage.getRegionConfig(regionId);
+        // 使用服务器存储架构获取区域邮编
+        const regionConfig = await serverStorage.getRegionConfig(regionId);
         const postalCodes = regionConfig ? regionConfig.postalCodes : [];
         if (postalCodes && postalCodes.length > 0) {
           regionFSAs.push(...postalCodes);

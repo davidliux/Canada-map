@@ -1,14 +1,13 @@
 /**
  * 统一导出工具函数
- * 使用云端优先存储系统替代原有的localStorage存储
+ * 使用服务器端存储系统替代原有的localStorage存储
  */
 
-// 导出云端优先存储系统
-export { 
-  cloudStorage, 
-  CLOUD_STORAGE_KEYS, 
-  SYNC_STATUS 
-} from './cloudFirstStorage';
+// 导出服务器端存储系统
+export {
+  serverStorage,
+  SYNC_STATUS
+} from './serverStorage';
 
 // 导出原有的统一存储系统（仅用于兼容）
 export { 

@@ -4,14 +4,8 @@ import { Truck, Zap, Globe, Settings, Bell, User, Database, Download, RefreshCw 
 import EnhancedSearchPanel from './components/EnhancedSearchPanel';
 import EnhancedStatsPanel from './components/EnhancedStatsPanel';
 import AccurateFSAMap from './components/AccurateFSAMap';
-import {
-  cloudStorage,
-  dataUpdateNotifier,
-  recoverLegacyData,
-  checkDataIntegrity,
-  startAutoBackup,
-  envConfig
-} from './utils/index.js';
+import { serverStorage } from './utils/serverStorage.js';
+import { dataUpdateNotifier } from './utils/dataUpdateNotifier';
 import {
   checkDataIntegrity as checkPersistenceIntegrity,
   restoreDefaultDemoData
@@ -21,7 +15,7 @@ import './utils/demoSetup.js'; // 加载演示设置脚本
 
 import RegionManagementPanel from './components/RegionManagementPanel';
 import ImportExportManager from './components/ImportExportManager';
-import CloudSyncStatus from './components/CloudSyncStatus';
+import ServerSyncStatus from './components/ServerSyncStatus';
 import DevTools from './components/DevTools';
 import ToolPageRouter from './components/ToolPageRouter';
 
@@ -51,19 +45,20 @@ function App() {
     }
   }, []);
 
-  // 初始化云端存储
+  // 初始化服务器存储
   useEffect(() => {
-    const initCloudStorage = async () => {
+    const initServerStorage = async () => {
       try {
-        // cloudStorage会自动检查连接并同步
-        console.log('☁️ 初始化云端存储系统');
+        // serverStorage会自动检查服务器连接
+        console.log('🖥️ 初始化服务器存储系统');
+        await serverStorage.checkServerConnection();
       } catch (error) {
-        console.error('初始化云端存储失败:', error);
+        console.error('初始化服务器存储失败:', error);
       }
     };
 
     // 延迟初始化，确保应用已完全加载
-    const timer = setTimeout(initCloudStorage, 1000);
+    const timer = setTimeout(initServerStorage, 1000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -303,11 +298,11 @@ function App() {
 
                 <button
                   onClick={() => setShowSyncDetails(!showSyncDetails)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-green-500 hover:text-green-400 hover:bg-green-400/20 border border-green-400/30 hover:border-green-400/50"
-                  title="云端同步状态 - 查看数据同步情况"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-blue-500 hover:text-blue-400 hover:bg-blue-400/20 border border-blue-400/30 hover:border-blue-400/50"
+                  title="服务器同步状态 - 查看数据同步情况"
                 >
-                  <CloudSyncStatus />
-                  <span className="hidden sm:inline text-sm font-medium">云端同步</span>
+                  <ServerSyncStatus />
+                  <span className="hidden sm:inline text-sm font-medium">服务器同步</span>
                 </button>
 
                 {/* 数据迁移工具 - 用于将localStorage数据迁移到Vercel KV存储 */}
@@ -608,12 +603,12 @@ function App() {
         </div>
       )}
 
-      {/* 云端同步详情 */}
+      {/* 服务器同步详情 */}
       {showSyncDetails && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">云端同步状态</h2>
+              <h2 className="text-xl font-bold">服务器同步状态</h2>
               <button
                 onClick={() => setShowSyncDetails(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -621,7 +616,7 @@ function App() {
                 ✕
               </button>
             </div>
-            <CloudSyncStatus showDetails={true} className="w-full" />
+            <ServerSyncStatus showDetails={true} className="w-full" />
           </div>
         </div>
       )}

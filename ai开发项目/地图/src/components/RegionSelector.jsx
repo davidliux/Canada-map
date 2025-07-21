@@ -11,12 +11,8 @@ import {
   Settings,
   RefreshCw
 } from 'lucide-react';
-import {
-  getAllRegionConfigs,
-  saveRegionConfig,
-  getStorageStats,
-  getRegionStats
-} from '../utils/unifiedStorage.js';
+import { serverStorage } from '../utils/serverStorage.js';
+import { getStorageStats, getRegionStats } from '../utils/unifiedStorage.js';
 import {
   getRegionDisplayInfo
 } from '../data/regionManagement.js';
@@ -48,8 +44,8 @@ const RegionSelector = ({
     try {
       console.log('开始加载区域数据...');
 
-      // 获取区域配置（这会触发数据迁移）
-      const configs = getAllRegionConfigs();
+      // 获取区域配置（从服务器）
+      const configs = await serverStorage.getAllRegionConfigs();
       setRegionConfigs(configs);
 
       console.log('区域配置加载完成:', configs);

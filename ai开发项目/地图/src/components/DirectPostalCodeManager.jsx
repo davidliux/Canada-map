@@ -14,11 +14,8 @@ import {
   X,
   Package
 } from 'lucide-react';
-import {
-  getRegionPostalCodes,
-  setRegionPostalCodes,
-  getRegionConfig
-} from '../utils/unifiedStorage.js';
+import { serverStorage } from '../utils/serverStorage.js';
+import { getRegionPostalCodes, setRegionPostalCodes } from '../utils/unifiedStorage.js';
 
 /**
  * 直接邮编管理组件
