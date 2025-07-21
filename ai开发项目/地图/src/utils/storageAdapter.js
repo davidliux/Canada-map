@@ -4,18 +4,14 @@
  */
 
 import { UnifiedStorageAPI } from './apiClient.js';
+import { shouldUseAPIStorage, getEnvironmentConfig, logEnvironmentConfig } from './envConfig.js';
 
-// 检测环境
-const isProduction = process.env.NODE_ENV === 'production';
-const forceUseAPI = process.env.REACT_APP_USE_API === 'true';
-const shouldUseAPI = isProduction || forceUseAPI;
+// 获取环境配置
+const envConfig = getEnvironmentConfig();
+const shouldUseAPI = shouldUseAPIStorage();
 
-console.log('存储适配器配置:', {
-  isProduction,
-  forceUseAPI,
-  shouldUseAPI,
-  environment: process.env.NODE_ENV
-});
+// 输出配置信息
+logEnvironmentConfig();
 
 /**
  * 存储适配器类

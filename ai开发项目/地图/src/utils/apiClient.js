@@ -3,10 +3,10 @@
  * 统一管理所有API调用，提供与localStorage相同的接口
  */
 
+import { getAPIBaseURL } from './envConfig.js';
+
 // API基础配置
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://canada-map-oyu1.vercel.app/api'
-  : '/api';
+const API_BASE_URL = getAPIBaseURL();
 
 // 通用API请求函数
 async function apiRequest(endpoint, options = {}) {

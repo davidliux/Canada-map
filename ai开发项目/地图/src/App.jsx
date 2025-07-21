@@ -18,6 +18,7 @@ import {
 import RegionManagementPanel from './components/RegionManagementPanel';
 import ImportExportManager from './components/ImportExportManager';
 import MigrationToolPage from './components/MigrationToolPage';
+import DevTools from './components/DevTools';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -495,7 +496,84 @@ function App() {
       </motion.footer>
 
       {/* 数据恢复通知 */}
-      <DataRecoveryNotification />
+      {showDataRecovery && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-red-500/30 rounded-xl shadow-2xl w-full max-w-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-red-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 text-red-400">⚠️</div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">数据丢失检测</h2>
+                  <p className="text-sm text-gray-400">检测到配送数据可能丢失，需要恢复</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDataRecovery(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors text-gray-400"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+                <h3 className="text-red-400 font-semibold mb-2">问题描述：</h3>
+                <p className="text-red-300 text-sm">
+                  系统检测到配送区域数据严重不足，可能是由于数据丢失导致。
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const result = await restoreDefaultDemoData();
+                      if (result.success) {
+                        console.log('✅ 默认数据恢复成功');
+                        setDataRefreshTrigger(prev => prev + 1);
+                        setShowDataRecovery(false);
+                        setTimeout(() => window.location.reload(), 1000);
+                      }
+                    } catch (error) {
+                      console.error('❌ 恢复失败:', error);
+                      alert('恢复失败: ' + error.message);
+                    }
+                  }}
+                  className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg transition-all"
+                >
+                  <div className="w-5 h-5">🔄</div>
+                  <div className="text-left">
+                    <div className="font-semibold">恢复默认数据</div>
+                    <div className="text-sm opacity-90">恢复5个区域的演示数据</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setShowMigrationTool(true)}
+                  className="flex items-center gap-3 p-4 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg transition-all"
+                >
+                  <div className="w-5 h-5">🛠️</div>
+                  <div className="text-left">
+                    <div className="font-semibold">打开迁移工具</div>
+                    <div className="text-sm opacity-90">使用高级恢复工具</div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
+                <div className="text-blue-300 text-sm">
+                  <p className="font-medium mb-1">💡 建议：</p>
+                  <ul className="space-y-1 text-xs opacity-90">
+                    <li>• 推荐首先尝试"恢复默认数据"</li>
+                    <li>• 如果您有备份文件，使用"迁移工具"导入</li>
+                    <li>• 恢复后建议定期导出数据作为备份</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 数据迁移工具 */}
       {showMigrationTool && (
@@ -503,6 +581,9 @@ function App() {
           onClose={() => setShowMigrationTool(false)}
         />
       )}
+
+      {/* 开发工具 */}
+      <DevTools />
 
       {/* 科技风格背景效果 */}
       <div className="fixed inset-0 pointer-events-none z-0">
