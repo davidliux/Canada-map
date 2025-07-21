@@ -19,6 +19,7 @@ import RegionManagementPanel from './components/RegionManagementPanel';
 import ImportExportManager from './components/ImportExportManager';
 import MigrationToolPage from './components/MigrationToolPage';
 import DevTools from './components/DevTools';
+import ToolPageRouter from './components/ToolPageRouter';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,6 +34,18 @@ function App() {
   const [dataRefreshTrigger, setDataRefreshTrigger] = useState(0);
   const [showDataRecovery, setShowDataRecovery] = useState(false);
   const [showMigrationTool, setShowMigrationTool] = useState(false);
+
+  // 检查URL路径，如果是工具页面则显示工具路由
+  const [showToolRouter, setShowToolRouter] = useState(false);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/migration-tool' || path === '/migration-tool.html' ||
+        path === '/data-recovery-tool' || path === '/data-recovery-tool.html' ||
+        path === '/test-recovery' || path === '/test-recovery.html') {
+      setShowToolRouter(true);
+    }
+  }, []);
 
   useEffect(() => {
     // 系统启动时进行数据恢复检查
@@ -584,6 +597,16 @@ function App() {
 
       {/* 开发工具 */}
       <DevTools />
+
+      {/* 工具页面路由 */}
+      {showToolRouter && (
+        <ToolPageRouter
+          onClose={() => {
+            setShowToolRouter(false);
+            window.history.pushState({}, '', '/');
+          }}
+        />
+      )}
 
       {/* 科技风格背景效果 */}
       <div className="fixed inset-0 pointer-events-none z-0">

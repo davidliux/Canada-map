@@ -18,7 +18,9 @@ export default defineConfig({
       output: {
         manualChunks: undefined
       }
-    }
+    },
+    // 确保public目录文件被复制
+    copyPublicDir: true
   },
   base: './'  // 确保使用相对路径
 }) 

@@ -21,6 +21,18 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/migration-tool",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/data-recovery-tool",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/test-recovery",
+      "dest": "/index.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }

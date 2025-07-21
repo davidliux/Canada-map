@@ -5,7 +5,7 @@
  * 验证生产环境是否包含最新功能
  */
 
-const https = require('https');
+import https from 'https';
 
 const PRODUCTION_URL = 'https://canada-map-oyu1.vercel.app';
 
