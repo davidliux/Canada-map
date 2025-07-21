@@ -9,10 +9,14 @@ import { dataUpdateNotifier } from './utils/dataUpdateNotifier';
 import { recoverLegacyData, checkDataIntegrity } from './utils/dataRecovery';
 import './utils/quickSetup.js'; // 加载快速启动脚本
 import './utils/demoSetup.js'; // 加载演示设置脚本
+import {
+  checkDataIntegrity as checkPersistenceIntegrity,
+  restoreDefaultDemoData,
+  startAutoBackup
+} from './utils/dataPersistence.js';
 
 import RegionManagementPanel from './components/RegionManagementPanel';
 import ImportExportManager from './components/ImportExportManager';
-import DataRecoveryNotification from './components/DataRecoveryNotification';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,6 +29,7 @@ function App() {
   const [showRegionManagement, setShowRegionManagement] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [dataRefreshTrigger, setDataRefreshTrigger] = useState(0);
+  const [showDataRecovery, setShowDataRecovery] = useState(false);
 
   useEffect(() => {
     // 系统启动时进行数据恢复检查
@@ -32,19 +37,39 @@ function App() {
       console.log('🚀 系统启动中...');
 
       // 检查数据完整性
-      const integrityReport = checkDataIntegrity();
+      const integrityReport = checkPersistenceIntegrity();
       console.log('📊 数据完整性报告:', integrityReport);
 
       // 如果数据不完整，尝试恢复
-      if (integrityReport.totalFSAs === 0 || integrityReport.regionsWithData === 0) {
-        console.log('⚠️ 检测到数据问题，开始恢复...');
+      if (!integrityReport.isHealthy) {
+        console.log('⚠️ 检测到数据问题:', integrityReport.issues);
+
+        // 如果FSA数量过少，可能是数据丢失
+        if (integrityReport.stats && integrityReport.stats.totalFSAs < 10) {
+          console.log('🔄 检测到严重数据丢失，显示恢复界面...');
+          setShowDataRecovery(true);
+          return; // 显示恢复界面，让用户选择恢复方式
+        }
+
+        // 尝试恢复遗留数据
         const recoveryResult = recoverLegacyData();
-        console.log('🔄 数据恢复结果:', recoveryResult);
+        console.log('🔄 遗留数据恢复结果:', recoveryResult);
 
         if (recoveryResult.success) {
           // 恢复成功后触发数据刷新
           setDataRefreshTrigger(prev => prev + 1);
+        } else {
+          // 如果遗留数据恢复也失败，显示恢复界面
+          setShowDataRecovery(true);
         }
+      } else {
+        console.log('✅ 数据完整性检查通过');
+
+        // 启动自动备份
+        const stopAutoBackup = startAutoBackup(30); // 每30分钟备份一次
+
+        // 在组件卸载时停止自动备份
+        window.stopAutoBackup = stopAutoBackup;
       }
     };
 
@@ -324,6 +349,87 @@ function App() {
             setDataRefreshTrigger(prev => prev + 1);
           }}
         />
+      )}
+
+      {/* 数据恢复通知 */}
+      {showDataRecovery && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 border border-red-500/30 rounded-xl shadow-2xl w-full max-w-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-red-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 text-red-400">⚠️</div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">数据丢失检测</h2>
+                  <p className="text-sm text-gray-400">检测到配送数据可能丢失，需要恢复</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDataRecovery(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors text-gray-400"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+                <h3 className="text-red-400 font-semibold mb-2">问题描述：</h3>
+                <p className="text-red-300 text-sm">
+                  系统检测到配送区域数据严重不足（FSA数量 &lt; 10），可能是由于数据丢失导致。
+                  之前您有710个FSA，现在只剩下默认的几个。
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    try {
+                      const result = restoreDefaultDemoData();
+                      if (result.success) {
+                        console.log('✅ 默认数据恢复成功');
+                        setDataRefreshTrigger(prev => prev + 1);
+                        setShowDataRecovery(false);
+                        setTimeout(() => window.location.reload(), 1000);
+                      }
+                    } catch (error) {
+                      console.error('❌ 恢复失败:', error);
+                      alert('恢复失败: ' + error.message);
+                    }
+                  }}
+                  className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg transition-all"
+                >
+                  <div className="w-5 h-5">🔄</div>
+                  <div className="text-left">
+                    <div className="font-semibold">恢复默认数据</div>
+                    <div className="text-sm opacity-90">恢复5个区域的演示数据</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => window.open('/data-recovery-tool.html', '_blank')}
+                  className="flex items-center gap-3 p-4 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg transition-all"
+                >
+                  <div className="w-5 h-5">🛠️</div>
+                  <div className="text-left">
+                    <div className="font-semibold">打开恢复工具</div>
+                    <div className="text-sm opacity-90">使用高级恢复工具</div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
+                <div className="text-blue-300 text-sm">
+                  <p className="font-medium mb-1">💡 建议：</p>
+                  <ul className="space-y-1 text-xs opacity-90">
+                    <li>• 推荐首先尝试"恢复默认数据"</li>
+                    <li>• 如果您有备份文件，使用"恢复工具"导入</li>
+                    <li>• 恢复后建议定期导出数据作为备份</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 增强版底部状态栏 */}
