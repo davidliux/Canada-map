@@ -1,40 +1,35 @@
 {
   "version": 2,
   "name": "canada-map-delivery-system",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install --include=dev",
+  "framework": "vite",
   "functions": {
     "api/**/*.js": {
       "runtime": "nodejs18.x"
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
-      "src": "/migration-tool",
-      "dest": "/index.html"
+      "source": "/migration-tool",
+      "destination": "/index.html"
     },
     {
-      "src": "/data-recovery-tool",
-      "dest": "/index.html"
+      "source": "/data-recovery-tool",
+      "destination": "/index.html"
     },
     {
-      "src": "/test-recovery",
-      "dest": "/index.html"
+      "source": "/test-recovery",
+      "destination": "/index.html"
     },
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "env": {
