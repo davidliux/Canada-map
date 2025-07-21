@@ -9,6 +9,12 @@ import L from 'leaflet';
 import { deliverableFSAs } from '../data/deliverableFSA.js';
 import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerator.js';
 import { localStorageAdapter } from '../utils/localStorageAdapter.js';
+import {
+  calculateSmartZoomTarget,
+  generateProvinceNavigation,
+  shouldShowProvinceNavigation,
+  formatProvinceStats
+} from '../utils/regionAnalyzer.js';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 import ProvinceAnalyzer from './ProvinceAnalyzer';
 import FixedQuotationPanel from './FixedQuotationPanel';
@@ -26,6 +32,8 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   const mapRef = useRef(null);
   const [currentDeliverableFSAs, setCurrentDeliverableFSAs] = useState([]);
   const [currentMapProvince, setCurrentMapProvince] = useState(selectedProvince);
+  const [provinceNavigation, setProvinceNavigation] = useState([]);
+  const [smartZoomTarget, setSmartZoomTarget] = useState(null);
   const [selectedFSAForQuotation, setSelectedFSAForQuotation] = useState(null);
 
   // 设置全局函数供弹窗使用
@@ -181,9 +189,25 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     const map = useMap();
 
     useEffect(() => {
-      if (!map || !filteredData || filteredData.features.length === 0) return;
+      if (!map) return;
 
       const timeout = setTimeout(() => {
+        // 优先使用智能缩放目标
+        if (smartZoomTarget && selectedRegions.length > 0) {
+          console.log('🎯 执行智能缩放:', smartZoomTarget.type, smartZoomTarget.analysis.primaryProvince?.name);
+          const target = smartZoomTarget.target;
+          map.setView(target.center, target.zoom);
+          return;
+        }
+
+        // 如果没有智能缩放目标，使用原有逻辑
+        if (!filteredData || filteredData.features.length === 0) {
+          // 显示全加拿大
+          const bounds = getProvinceBounds('all');
+          map.setView(bounds.center, bounds.zoom);
+          return;
+        }
+
         // 使用当前地图省份而不是选中省份
         const targetProvince = currentMapProvince || selectedProvince;
 
@@ -200,10 +224,10 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
               const layer = L.geoJSON(feature);
               group.addLayer(layer);
             });
-            
+
             if (group.getLayers().length > 0) {
               // 缩放到筛选区域的边界，添加适当的边距
-              map.fitBounds(group.getBounds(), { 
+              map.fitBounds(group.getBounds(), {
                 padding: [20, 20],
                 maxZoom: 8 // 限制最大缩放级别，避免过度放大
               });
@@ -221,9 +245,20 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
       }, 300); // 添加延迟确保数据渲染完成
 
       return () => clearTimeout(timeout);
-    }, [map, currentMapProvince, selectedProvince, filteredData]);
+    }, [map, currentMapProvince, selectedProvince, filteredData, smartZoomTarget, selectedRegions]);
 
     return null;
+  };
+
+  // 省份跳转功能
+  const handleProvinceJump = (provinceCode) => {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current;
+    const bounds = getProvinceBounds(provinceCode);
+
+    console.log('🚀 跳转到省份:', provinceCode, bounds);
+    map.setView(bounds.center, bounds.zoom);
   };
 
   // 获取区域筛选的FSA列表
@@ -249,6 +284,26 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     }
 
     console.log('🎯 区域筛选FSA列表:', regionFSAs.length, '个', regionFSAs);
+
+    // 分析省份分布并生成智能缩放目标
+    if (regionFSAs.length > 0) {
+      const zoomTarget = calculateSmartZoomTarget(regionFSAs, mapData);
+      const navigation = generateProvinceNavigation(zoomTarget.analysis);
+
+      setSmartZoomTarget(zoomTarget);
+      setProvinceNavigation(navigation);
+
+      console.log('🧠 智能缩放分析:', {
+        type: zoomTarget.type,
+        primaryProvince: zoomTarget.analysis.primaryProvince?.name,
+        provinceCount: zoomTarget.analysis.provinceCount,
+        navigation: navigation.length
+      });
+    } else {
+      setSmartZoomTarget(null);
+      setProvinceNavigation([]);
+    }
+
     return regionFSAs;
   };
 
@@ -561,6 +616,66 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
             );
           })()}
         </MapContainer>
+
+        {/* 智能地图导航面板 */}
+        {shouldShowProvinceNavigation(smartZoomTarget?.analysis) && (
+          <div className="absolute bottom-4 right-4 bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-lg z-1000 max-w-[320px]">
+            <h4 className="font-bold text-sm mb-3 flex items-center">
+              <MapPin className="w-4 h-4 mr-2 text-blue-500" />
+              智能地图导航
+            </h4>
+
+            <div className="space-y-3">
+              <div>
+                <h5 className="font-medium text-xs mb-2 text-gray-600">
+                  当前显示: {smartZoomTarget?.analysis.primaryProvince?.name}
+                  <span className="text-green-600 ml-1">(主要省份)</span>
+                </h5>
+                <p className="text-xs text-gray-500 mb-2">
+                  {formatProvinceStats(smartZoomTarget?.analysis)}
+                </p>
+              </div>
+
+              <div className="border-t pt-2">
+                <h5 className="font-medium text-xs mb-2">涉及省份 - 点击跳转</h5>
+                <div className="space-y-1">
+                  {provinceNavigation.map((province, index) => (
+                    <button
+                      key={province.code}
+                      onClick={() => handleProvinceJump(province.code)}
+                      className={`w-full text-left px-2 py-1 rounded text-xs transition-all hover:bg-gray-100 ${
+                        province.isPrimary ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: province.color }}
+                          ></div>
+                          <span className={province.isPrimary ? 'font-medium text-blue-700' : 'text-gray-700'}>
+                            {province.name}
+                            {province.isPrimary && <span className="text-blue-500 ml-1">★</span>}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-gray-600">{province.count}个</div>
+                          <div className="text-gray-400">{province.percentage}%</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t pt-2">
+                <p className="text-xs text-gray-500">
+                  💡 地图已自动缩放到邮编数量最多的省份
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 详细图例 */}
         <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-lg z-1000 max-w-[280px]">
