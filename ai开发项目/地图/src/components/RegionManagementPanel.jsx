@@ -16,10 +16,7 @@ import RegionSelector from './RegionSelector';
 import RegionPriceManager from './RegionPriceManager';
 import DirectPostalCodeManager from './DirectPostalCodeManager';
 import BatchPriceManager from './BatchPriceManager';
-import {
-  getAllRegionConfigs,
-  getStorageStats
-} from '../utils/unifiedStorage.js';
+import { cloudStorage } from '../utils/cloudFirstStorage.js';
 import {
   getRegionDisplayInfo
 } from '../data/regionManagement.js';
@@ -75,9 +72,9 @@ const RegionManagementPanel = ({
     try {
       console.log('开始加载区域管理数据...');
 
-      // 使用统一存储架构获取数据
-      const regions = getAllRegionConfigs();
-      const stats = getStorageStats();
+      // 使用云端优先存储架构获取数据
+      const regions = await cloudStorage.getAllRegionConfigs();
+      const stats = cloudStorage.getSyncStatus();
 
       console.log('数据加载完成:', { regions, stats });
 

@@ -8,7 +8,7 @@ import L from 'leaflet';
 // 可配送的FSA列表
 import { deliverableFSAs } from '../data/deliverableFSA.js';
 import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerator.js';
-import { getRegionPostalCodes } from '../utils/unifiedStorage';
+import { cloudStorage } from '../utils/cloudFirstStorage';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 import ProvinceAnalyzer from './ProvinceAnalyzer';
 import FixedQuotationPanel from './FixedQuotationPanel';
@@ -227,14 +227,16 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   };
 
   // 获取区域筛选的FSA列表
-  const getRegionFilteredFSAs = () => {
+  const getRegionFilteredFSAs = async () => {
     if (selectedRegions.length === 0) return [];
 
     const regionFSAs = [];
-    selectedRegions.forEach(regionId => {
+
+    for (const regionId of selectedRegions) {
       try {
-        // 使用统一存储架构获取区域邮编
-        const postalCodes = getRegionPostalCodes(regionId);
+        // 使用云端优先存储架构获取区域邮编
+        const regionConfig = await cloudStorage.getRegionConfig(regionId);
+        const postalCodes = regionConfig ? regionConfig.postalCodes : [];
         if (postalCodes && postalCodes.length > 0) {
           regionFSAs.push(...postalCodes);
           console.log(`📍 区域${regionId}邮编数据:`, postalCodes.length, '个');
@@ -244,22 +246,23 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
       } catch (error) {
         console.error(`❌ 读取区域 ${regionId} 邮编数据失败:`, error);
       }
-    });
+    }
 
     console.log('🎯 区域筛选FSA列表:', regionFSAs.length, '个', regionFSAs);
     return regionFSAs;
   };
 
   useEffect(() => {
-    if (mapData) {
-      console.log('🔍 开始计算地图筛选结果...');
-      let filtered = mapData.features.map(feature => feature.properties.CFSAUID);
-      console.log('📊 地图总FSA数量:', filtered.length);
+    const applyFilters = async () => {
+      if (mapData) {
+        console.log('🔍 开始计算地图筛选结果...');
+        let filtered = mapData.features.map(feature => feature.properties.CFSAUID);
+        console.log('📊 地图总FSA数量:', filtered.length);
 
       // 应用区域筛选（优先级最高）
       if (selectedRegions.length > 0) {
         console.log('🎯 应用区域筛选，选中区域:', selectedRegions);
-        const regionFSAs = getRegionFilteredFSAs();
+        const regionFSAs = await getRegionFilteredFSAs();
         const beforeCount = filtered.length;
         filtered = filtered.filter(fsa => regionFSAs.includes(fsa));
         console.log(`📍 区域筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
@@ -282,9 +285,12 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         console.log(`🔍 搜索筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
       }
 
-      console.log('✅ 最终筛选结果:', filtered.length, '个FSA');
-      setFilteredFSAs(filtered);
-    }
+        console.log('✅ 最终筛选结果:', filtered.length, '个FSA');
+        setFilteredFSAs(filtered);
+      }
+    };
+
+    applyFilters();
   }, [searchQuery, mapData, selectedProvince, selectedRegions]);
 
   // 根据省份获取颜色
