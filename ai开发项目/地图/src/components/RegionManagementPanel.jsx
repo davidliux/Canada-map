@@ -16,7 +16,7 @@ import RegionSelector from './RegionSelector';
 import RegionPriceManager from './RegionPriceManager';
 import DirectPostalCodeManager from './DirectPostalCodeManager';
 import BatchPriceManager from './BatchPriceManager';
-import { serverStorage } from '../utils/serverStorage.js';
+import { localStorageAdapter } from '../utils/localStorageAdapter.js';
 import {
   getRegionDisplayInfo
 } from '../data/regionManagement.js';
@@ -72,9 +72,9 @@ const RegionManagementPanel = ({
     try {
       console.log('开始加载区域管理数据...');
 
-      // 使用服务器存储架构获取数据
-      const regions = await serverStorage.getAllRegionConfigs();
-      const stats = serverStorage.getSyncStatus();
+      // 使用localStorage存储架构获取数据
+      const regions = await localStorageAdapter.getAllRegionConfigs();
+      const stats = localStorageAdapter.getSyncStatus();
 
       console.log('数据加载完成:', { regions, stats });
 

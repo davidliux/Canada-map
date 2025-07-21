@@ -4,7 +4,7 @@ import { Truck, Zap, Globe, Settings, Bell, User, Database, Download, RefreshCw 
 import EnhancedSearchPanel from './components/EnhancedSearchPanel';
 import EnhancedStatsPanel from './components/EnhancedStatsPanel';
 import AccurateFSAMap from './components/AccurateFSAMap';
-import { serverStorage } from './utils/serverStorage.js';
+import { localStorageAdapter } from './utils/localStorageAdapter.js';
 import { dataUpdateNotifier } from './utils/dataUpdateNotifier';
 import {
   checkDataIntegrity as checkPersistenceIntegrity,
@@ -174,8 +174,8 @@ function App() {
       const regionFSAs = [];
       for (const regionId of regions) {
         try {
-          // 使用服务器存储架构获取区域邮编
-          const regionConfig = await serverStorage.getRegionConfig(regionId);
+          // 使用localStorage存储架构获取区域邮编
+          const regionConfig = await localStorageAdapter.getRegionConfig(regionId);
           const postalCodes = regionConfig ? regionConfig.postalCodes : [];
           if (postalCodes && postalCodes.length > 0) {
             regionFSAs.push(...postalCodes);

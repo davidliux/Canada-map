@@ -14,7 +14,7 @@ import {
   FileText
 } from 'lucide-react';
 import { getFSAsByProvince } from '../data/deliverableFSA';
-import { serverStorage } from '../utils/serverStorage.js';
+import { localStorageAdapter } from '../utils/localStorageAdapter.js';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 
 const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince, onRegionFilter }) => {
@@ -171,7 +171,7 @@ const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince, onR
     for (let i = 1; i <= 8; i++) {
       const regionId = i.toString();
       try {
-        const regionConfig = await serverStorage.getRegionConfig(regionId);
+        const regionConfig = await localStorageAdapter.getRegionConfig(regionId);
         const postalCodes = regionConfig ? regionConfig.postalCodes : [];
         counts[regionId] = postalCodes.length;
       } catch (error) {
