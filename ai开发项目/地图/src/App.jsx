@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Truck, Zap, Globe, Settings, Bell, User, Database, Download } from 'lucide-react';
+import { Truck, Zap, Globe, Settings, Bell, User, Database, Download, RefreshCw } from 'lucide-react';
 import EnhancedSearchPanel from './components/EnhancedSearchPanel';
 import EnhancedStatsPanel from './components/EnhancedStatsPanel';
 import AccurateFSAMap from './components/AccurateFSAMap';
@@ -17,6 +17,7 @@ import {
 
 import RegionManagementPanel from './components/RegionManagementPanel';
 import ImportExportManager from './components/ImportExportManager';
+import MigrationToolPage from './components/MigrationToolPage';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,6 +31,7 @@ function App() {
   const [showImportExport, setShowImportExport] = useState(false);
   const [dataRefreshTrigger, setDataRefreshTrigger] = useState(0);
   const [showDataRecovery, setShowDataRecovery] = useState(false);
+  const [showMigrationTool, setShowMigrationTool] = useState(false);
 
   useEffect(() => {
     // 系统启动时进行数据恢复检查
@@ -265,6 +267,15 @@ function App() {
                   <span className="hidden sm:inline text-sm">导入导出</span>
                 </button>
 
+                <button
+                  onClick={() => setShowMigrationTool(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-blue-400 hover:bg-blue-400/10"
+                  title="数据迁移"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span className="hidden sm:inline text-sm">数据迁移</span>
+                </button>
+
                 {/* 数据修复按钮已删除 - 使用统一存储架构，不再需要数据迁移 */}
 
                 <button className="p-2 text-gray-400 hover:text-cyber-blue transition-colors relative">
@@ -485,6 +496,13 @@ function App() {
 
       {/* 数据恢复通知 */}
       <DataRecoveryNotification />
+
+      {/* 数据迁移工具 */}
+      {showMigrationTool && (
+        <MigrationToolPage
+          onClose={() => setShowMigrationTool(false)}
+        />
+      )}
 
       {/* 科技风格背景效果 */}
       <div className="fixed inset-0 pointer-events-none z-0">

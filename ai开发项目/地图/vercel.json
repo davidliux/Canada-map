@@ -21,6 +21,18 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/migration-tool.html",
+      "dest": "/migration-tool.html"
+    },
+    {
+      "src": "/data-recovery-tool.html",
+      "dest": "/data-recovery-tool.html"
+    },
+    {
+      "src": "/test-recovery.html",
+      "dest": "/test-recovery.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
@@ -48,18 +60,6 @@
       ]
     }
   ],
-  "rewrites": [
-    {
-      "source": "/data-recovery-tool.html",
-      "destination": "/data-recovery-tool.html"
-    },
-    {
-      "source": "/migration-tool.html", 
-      "destination": "/migration-tool.html"
-    },
-    {
-      "source": "/test-recovery.html",
-      "destination": "/test-recovery.html"
-    }
-  ]
+  "cleanUrls": true,
+  "trailingSlash": false
 }

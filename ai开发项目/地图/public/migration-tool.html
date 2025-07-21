@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据迁移工具 - Vercel KV</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #4ecdc4;
+        }
+        .button {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .button.success {
+            background: linear-gradient(45deg, #56ab2f 0%, #a8e6cf 100%);
+        }
+        .button.danger {
+            background: linear-gradient(45deg, #ff416c 0%, #ff4b2b 100%);
+        }
+        .button.warning {
+            background: linear-gradient(45deg, #f7971e 0%, #ffd200 100%);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4caf50;
+            color: #4caf50;
+        }
+        .status.error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+            color: #f44336;
+        }
+        .status.info {
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid #2196f3;
+            color: #2196f3;
+        }
+        .status.warning {
+            background: rgba(255, 193, 7, 0.2);
+            border: 1px solid #ffc107;
+            color: #ffc107;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .migration-details {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 数据迁移工具</h1>
+            <p>将localStorage数据迁移到Vercel KV存储</p>
+        </div>
+
+        <!-- 迁移状态检查 -->
+        <div class="section">
+            <h2>📊 迁移状态检查</h2>
+            <button class="button" onclick="checkMigrationStatus()">检查迁移需求</button>
+            <div id="migrationCheck"></div>
+            <div class="stats-grid" id="migrationStats"></div>
+        </div>
+
+        <!-- 迁移操作 -->
+        <div class="section">
+            <h2>🔄 数据迁移操作</h2>
+            <div class="grid">
+                <div>
+                    <h3>自动迁移</h3>
+                    <button class="button success" onclick="performAutoMigration()" id="autoMigrateBtn">
+                        开始自动迁移
+                    </button>
+                    <p style="font-size: 0.9em; opacity: 0.8;">
+                        自动检测并迁移localStorage数据到Vercel KV
+                    </p>
+                </div>
+                <div>
+                    <h3>手动迁移</h3>
+                    <button class="button warning" onclick="performManualMigration()" id="manualMigrateBtn">
+                        手动迁移设置
+                    </button>
+                    <p style="font-size: 0.9em; opacity: 0.8;">
+                        自定义迁移选项和参数
+                    </p>
+                </div>
+            </div>
+            
+            <div id="migrationProgress" style="display: none;">
+                <h3>迁移进度</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div id="progressText">准备中...</div>
+            </div>
+        </div>
+
+        <!-- 迁移结果 */
+        <div class="section">
+            <h2>📋 迁移结果</h2>
+            <div id="migrationResult"></div>
+            <div class="migration-details" id="migrationDetails" style="display: none;"></div>
+        </div>
+
+        <!-- 验证和测试 -->
+        <div class="section">
+            <h2>✅ 验证和测试</h2>
+            <div class="grid">
+                <button class="button" onclick="testAPIConnection()">测试API连接</button>
+                <button class="button" onclick="verifyMigration()">验证迁移结果</button>
+                <button class="button" onclick="compareData()">对比数据</button>
+                <button class="button success" onclick="openMainApp()">打开主应用</button>
+            </div>
+            <div id="testResults"></div>
+        </div>
+
+        <!-- 紧急操作 -->
+        <div class="section">
+            <h2>🆘 紧急操作</h2>
+            <div class="grid">
+                <button class="button danger" onclick="rollbackMigration()">回滚迁移</button>
+                <button class="button warning" onclick="createEmergencyBackup()">创建紧急备份</button>
+                <button class="button" onclick="clearAPIData()">清除API数据</button>
+                <button class="button" onclick="resetMigrationStatus()">重置迁移状态</button>
+            </div>
+            <div id="emergencyResults"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // 模拟迁移管理器（实际应用中会从模块导入）
+        class MigrationManager {
+            constructor() {
+                this.status = {
+                    inProgress: false,
+                    completed: false,
+                    error: null,
+                    migratedRegions: 0,
+                    totalRegions: 0,
+                    details: []
+                };
+            }
+
+            async checkMigrationNeeded() {
+                // 检查localStorage数据
+                const localData = JSON.parse(localStorage.getItem('regionConfigs') || '{}');
+                const localCount = Object.keys(localData).length;
+
+                // 模拟API检查
+                let apiCount = 0;
+                try {
+                    const response = await fetch('/api/regions?includeStats=true');
+                    if (response.ok) {
+                        const data = await response.json();
+                        apiCount = data.data.stats?.totalRegions || 0;
+                    }
+                } catch (error) {
+                    console.log('API检查失败:', error);
+                }
+
+                return {
+                    needed: localCount > 0 && apiCount < localCount,
+                    localCount,
+                    apiCount,
+                    reason: localCount > apiCount ? `需要迁移 ${localCount - apiCount} 个区域` : '无需迁移'
+                };
+            }
+
+            async performMigration(options = {}) {
+                this.status.inProgress = true;
+                this.status.error = null;
+                this.status.migratedRegions = 0;
+                this.status.details = [];
+
+                try {
+                    const localData = JSON.parse(localStorage.getItem('regionConfigs') || '{}');
+                    const regionIds = Object.keys(localData);
+                    this.status.totalRegions = regionIds.length;
+
+                    if (regionIds.length === 0) {
+                        throw new Error('没有找到需要迁移的数据');
+                    }
+
+                    // 批量迁移
+                    for (let i = 0; i < regionIds.length; i++) {
+                        const regionId = regionIds[i];
+                        const config = localData[regionId];
+
+                        try {
+                            const response = await fetch(`/api/regions/${regionId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(config)
+                            });
+
+                            if (response.ok) {
+                                this.status.migratedRegions++;
+                                this.status.details.push({
+                                    type: 'success',
+                                    message: `区域 ${regionId} 迁移成功`,
+                                    timestamp: new Date().toISOString()
+                                });
+                            } else {
+                                throw new Error(`HTTP ${response.status}`);
+                            }
+                        } catch (error) {
+                            this.status.details.push({
+                                type: 'error',
+                                message: `区域 ${regionId} 迁移失败: ${error.message}`,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+
+                        // 更新进度
+                        const progress = ((i + 1) / regionIds.length) * 100;
+                        this.updateProgress(progress, `迁移区域 ${regionId} (${i + 1}/${regionIds.length})`);
+
+                        // 添加延迟避免API限制
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+
+                    this.status.completed = true;
+                    this.status.inProgress = false;
+
+                    return {
+                        success: true,
+                        migratedRegions: this.status.migratedRegions,
+                        totalRegions: this.status.totalRegions,
+                        details: this.status.details
+                    };
+
+                } catch (error) {
+                    this.status.error = error.message;
+                    this.status.inProgress = false;
+                    throw error;
+                }
+            }
+
+            updateProgress(percentage, text) {
+                const progressFill = document.getElementById('progressFill');
+                const progressText = document.getElementById('progressText');
+                
+                if (progressFill) progressFill.style.width = `${percentage}%`;
+                if (progressText) progressText.textContent = text;
+            }
+        }
+
+        const migrationManager = new MigrationManager();
+
+        // 全局函数
+        window.checkMigrationStatus = async function() {
+            try {
+                const result = await migrationManager.checkMigrationNeeded();
+                
+                document.getElementById('migrationCheck').innerHTML = `
+                    <div class="status ${result.needed ? 'warning' : 'success'}">
+                        ${result.needed ? '⚠️ 需要迁移' : '✅ 无需迁移'}: ${result.reason}
+                    </div>
+                `;
+
+                document.getElementById('migrationStats').innerHTML = `
+                    <div class="stat-item">
+                        <div class="stat-number">${result.localCount}</div>
+                        <div class="stat-label">localStorage区域</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${result.apiCount}</div>
+                        <div class="stat-label">API区域</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${Math.max(0, result.localCount - result.apiCount)}</div>
+                        <div class="stat-label">需要迁移</div>
+                    </div>
+                `;
+
+                // 启用/禁用迁移按钮
+                const autoBtn = document.getElementById('autoMigrateBtn');
+                const manualBtn = document.getElementById('manualMigrateBtn');
+                
+                if (result.needed) {
+                    autoBtn.disabled = false;
+                    manualBtn.disabled = false;
+                } else {
+                    autoBtn.disabled = true;
+                    manualBtn.disabled = true;
+                }
+
+            } catch (error) {
+                document.getElementById('migrationCheck').innerHTML = `
+                    <div class="status error">
+                        ❌ 检查失败: ${error.message}
+                    </div>
+                `;
+            }
+        };
+
+        window.performAutoMigration = async function() {
+            const progressDiv = document.getElementById('migrationProgress');
+            const resultDiv = document.getElementById('migrationResult');
+            const detailsDiv = document.getElementById('migrationDetails');
+
+            progressDiv.style.display = 'block';
+            resultDiv.innerHTML = '';
+            detailsDiv.style.display = 'none';
+
+            try {
+                const result = await migrationManager.performMigration();
+                
+                resultDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ 迁移完成！成功迁移 ${result.migratedRegions}/${result.totalRegions} 个区域
+                    </div>
+                `;
+
+                detailsDiv.style.display = 'block';
+                detailsDiv.innerHTML = result.details.map(detail => 
+                    `[${detail.timestamp.split('T')[1].split('.')[0]}] ${detail.type.toUpperCase()}: ${detail.message}`
+                ).join('\n');
+
+                progressDiv.style.display = 'none';
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ 迁移失败: ${error.message}
+                    </div>
+                `;
+                progressDiv.style.display = 'none';
+            }
+        };
+
+        window.performManualMigration = function() {
+            alert('手动迁移功能开发中...\n\n可配置选项：\n- 批量大小\n- 覆盖现有数据\n- 创建备份\n- 迁移特定区域');
+        };
+
+        window.testAPIConnection = async function() {
+            try {
+                const response = await fetch('/api/regions');
+                const result = response.ok ? '✅ API连接正常' : `❌ API连接失败: ${response.status}`;
+                
+                document.getElementById('testResults').innerHTML = `
+                    <div class="status ${response.ok ? 'success' : 'error'}">
+                        ${result}
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = `
+                    <div class="status error">
+                        ❌ API连接失败: ${error.message}
+                    </div>
+                `;
+            }
+        };
+
+        window.verifyMigration = async function() {
+            try {
+                const localData = JSON.parse(localStorage.getItem('regionConfigs') || '{}');
+                const response = await fetch('/api/regions');
+                const apiResult = await response.json();
+                const apiData = apiResult.data || {};
+
+                const localCount = Object.keys(localData).length;
+                const apiCount = Object.keys(apiData).length;
+                const isValid = localCount === apiCount;
+
+                document.getElementById('testResults').innerHTML = `
+                    <div class="status ${isValid ? 'success' : 'warning'}">
+                        ${isValid ? '✅ 验证通过' : '⚠️ 数据不匹配'}: localStorage(${localCount}) vs API(${apiCount})
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('testResults').innerHTML = `
+                    <div class="status error">
+                        ❌ 验证失败: ${error.message}
+                    </div>
+                `;
+            }
+        };
+
+        window.compareData = function() {
+            alert('数据对比功能开发中...\n\n将显示：\n- 缺失的区域\n- 多余的区域\n- 数据差异详情');
+        };
+
+        window.openMainApp = function() {
+            window.open('/', '_blank');
+        };
+
+        window.rollbackMigration = function() {
+            if (confirm('确定要回滚迁移吗？这将清除API中的数据。')) {
+                alert('回滚功能开发中...');
+            }
+        };
+
+        window.createEmergencyBackup = function() {
+            try {
+                const localData = JSON.parse(localStorage.getItem('regionConfigs') || '{}');
+                const backupData = {
+                    regionConfigs: localData,
+                    timestamp: new Date().toISOString(),
+                    type: 'emergency_backup'
+                };
+
+                const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `emergency-backup-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                document.getElementById('emergencyResults').innerHTML = `
+                    <div class="status success">
+                        ✅ 紧急备份已下载
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('emergencyResults').innerHTML = `
+                    <div class="status error">
+                        ❌ 备份失败: ${error.message}
+                    </div>
+                `;
+            }
+        };
+
+        window.clearAPIData = function() {
+            if (confirm('确定要清除API中的所有数据吗？此操作不可撤销！')) {
+                alert('清除API数据功能开发中...');
+            }
+        };
+
+        window.resetMigrationStatus = function() {
+            migrationManager.status = {
+                inProgress: false,
+                completed: false,
+                error: null,
+                migratedRegions: 0,
+                totalRegions: 0,
+                details: []
+            };
+            
+            document.getElementById('migrationResult').innerHTML = '';
+            document.getElementById('migrationDetails').style.display = 'none';
+            document.getElementById('migrationProgress').style.display = 'none';
+            
+            document.getElementById('emergencyResults').innerHTML = `
+                <div class="status info">
+                    ℹ️ 迁移状态已重置
+                </div>
+            `;
+        };
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkMigrationStatus();
+        };
+    </script>
+</body>
+</html>
