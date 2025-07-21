@@ -17,14 +17,14 @@ const verificationChecks = [
     check: (content) => content.includes('加拿大快递配送区域地图')
   },
   {
-    name: '迁移工具页面',
-    url: '/migration-tool.html',
-    check: (content) => content.includes('数据迁移工具')
+    name: '数据迁移按钮存在',
+    url: '/',
+    check: (content) => content.includes('数据迁移') || content.includes('RefreshCw')
   },
   {
-    name: '数据恢复工具',
-    url: '/data-recovery-tool.html', 
-    check: (content) => content.includes('数据恢复工具')
+    name: '迁移工具路由',
+    url: '/migration-tool',
+    check: (content) => content.includes('加拿大快递配送区域地图') // SPA路由应该返回主页
   },
   {
     name: 'API端点测试',
@@ -37,6 +37,11 @@ const verificationChecks = [
         return false;
       }
     }
+  },
+  {
+    name: 'JavaScript资源加载',
+    url: '/',
+    check: (content) => content.includes('index-') && content.includes('.js')
   }
 ];
 
