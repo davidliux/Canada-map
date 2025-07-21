@@ -8,10 +8,6 @@
       "config": {
         "distDir": "dist"
       }
-    },
-    {
-      "src": "public/**/*.html",
-      "use": "@vercel/static"
     }
   ],
   "functions": {
@@ -23,18 +19,6 @@
     {
       "src": "/api/(.*)",
       "dest": "/api/$1"
-    },
-    {
-      "src": "/migration-tool.html",
-      "dest": "/migration-tool.html"
-    },
-    {
-      "src": "/data-recovery-tool.html",
-      "dest": "/data-recovery-tool.html"
-    },
-    {
-      "src": "/test-recovery.html",
-      "dest": "/test-recovery.html"
     },
     {
       "src": "/(.*)",

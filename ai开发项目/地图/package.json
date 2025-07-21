@@ -2,6 +2,7 @@
   "name": "canada-postal-delivery-map",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "description": "加拿大快递邮编展示系统 - 基于Statistics Canada官方FSA边界数据的可视化展示应用",
   "author": "Canada Postal Delivery System",
   "main": "electron.js",

@@ -8,26 +8,17 @@ export default defineConfig({
     open: true
   },
   build: {
-    // 禁用代码分割，将所有代码打包到一个文件中
-    rollupOptions: {
-      input: {
-        main: './index.html',
-        migration: './migration-tool.html',
-        recovery: './data-recovery-tool.html',
-        test: './test-recovery.html'
-      },
-      output: {
-        manualChunks: undefined,
-        // 生成单个文件
-        inlineDynamicImports: true
-      }
-    },
     // 生成相对路径的资源引用
     assetsDir: 'assets',
     // 不启用sourcemap
     sourcemap: false,
     // 使用esbuild压缩，不需要额外安装
-    minify: 'esbuild'
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
   },
   base: './'  // 确保使用相对路径
 }) 
