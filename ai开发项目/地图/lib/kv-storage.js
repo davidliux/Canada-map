@@ -3,7 +3,51 @@
  * 替代localStorage，提供服务器端数据持久化
  */
 
-import { kv } from '@vercel/kv';
+// 创建KV存储实例
+let kv;
+
+// 初始化KV存储
+function initKV() {
+  if (kv) return kv;
+
+  // 检查是否在Vercel环境中
+  const isVercelEnvironment = typeof process !== 'undefined' &&
+                             (process.env.VERCEL || process.env.VERCEL_ENV);
+
+  if (isVercelEnvironment) {
+    // 在Vercel环境中，动态导入真实的KV
+    console.log('☁️ 初始化Vercel KV存储');
+    // 这里会在运行时动态导入
+    kv = null; // 将在第一次使用时初始化
+  } else {
+    // 在本地开发环境中使用模拟KV
+    console.log('🔧 使用模拟KV存储（本地开发模式）');
+    kv = {
+      storage: new Map(),
+      async get(key) {
+        const value = this.storage.get(key);
+        console.log(`📖 KV GET ${key}:`, value ? '有数据' : '无数据');
+        return value || null;
+      },
+      async set(key, value) {
+        this.storage.set(key, value);
+        console.log(`💾 KV SET ${key}:`, typeof value === 'object' ? '对象数据' : value);
+        return 'OK';
+      },
+      async del(key) {
+        const existed = this.storage.has(key);
+        this.storage.delete(key);
+        console.log(`🗑️ KV DEL ${key}:`, existed ? '已删除' : '不存在');
+        return existed ? 1 : 0;
+      }
+    };
+  }
+
+  return kv;
+}
+
+// 初始化
+initKV();
 
 // 数据键名常量
 export const KV_KEYS = {
@@ -18,7 +62,54 @@ export const KV_KEYS = {
 // KV存储服务类
 export class KVStorageService {
   constructor() {
-    this.kv = kv;
+    this.kv = kv || initKV();
+  }
+
+  async getKV() {
+    if (!this.kv) {
+      // 检查是否在Vercel环境中
+      const isVercel = typeof process !== 'undefined' &&
+                      (process.env.VERCEL || process.env.VERCEL_ENV);
+
+      if (isVercel) {
+        // 在Vercel环境中动态导入
+        try {
+          const vercelKV = await import('@vercel/kv');
+          this.kv = vercelKV.kv;
+          console.log('☁️ Vercel KV已加载');
+        } catch (error) {
+          console.warn('⚠️ Vercel KV加载失败，使用模拟存储');
+          this.kv = this.createMockKV();
+        }
+      } else {
+        // 本地开发环境使用模拟存储
+        this.kv = this.createMockKV();
+      }
+    }
+    return this.kv;
+  }
+
+  createMockKV() {
+    console.log('🔧 创建模拟KV存储');
+    return {
+      storage: new Map(),
+      async get(key) {
+        const value = this.storage.get(key);
+        console.log(`📖 KV GET ${key}:`, value ? '有数据' : '无数据');
+        return value || null;
+      },
+      async set(key, value) {
+        this.storage.set(key, value);
+        console.log(`💾 KV SET ${key}:`, typeof value === 'object' ? '对象数据' : value);
+        return 'OK';
+      },
+      async del(key) {
+        const existed = this.storage.has(key);
+        this.storage.delete(key);
+        console.log(`🗑️ KV DEL ${key}:`, existed ? '已删除' : '不存在');
+        return existed ? 1 : 0;
+      }
+    };
   }
 
   /**
@@ -26,7 +117,8 @@ export class KVStorageService {
    */
   async getAllRegionConfigs() {
     try {
-      const data = await this.kv.get(KV_KEYS.REGION_CONFIGS);
+      const kv = await this.getKV();
+      const data = await kv.get(KV_KEYS.REGION_CONFIGS);
       return data || {};
     } catch (error) {
       console.error('获取区域配置失败:', error);
@@ -52,8 +144,9 @@ export class KVStorageService {
    */
   async saveRegionConfig(regionId, config) {
     try {
+      const kv = await this.getKV();
       const allConfigs = await this.getAllRegionConfigs();
-      
+
       // 添加时间戳和版本信息
       const updatedConfig = {
         ...config,
@@ -61,21 +154,18 @@ export class KVStorageService {
         lastUpdated: new Date().toISOString(),
         metadata: {
           ...config.metadata,
-          version: '2.1.0',
-          updatedBy: 'system'
+          version: '3.0.0',
+          updatedBy: 'server'
         }
       };
 
       allConfigs[regionId] = updatedConfig;
-      
-      await this.kv.set(KV_KEYS.REGION_CONFIGS, allConfigs);
-      
-      // 记录操作日志
-      await this.logOperation('update', 'region_config', regionId, config);
-      
+
+      await kv.set(KV_KEYS.REGION_CONFIGS, allConfigs);
+
       // 清除统计缓存
-      await this.kv.del(KV_KEYS.STATS_CACHE);
-      
+      await kv.del(KV_KEYS.STATS_CACHE);
+
       return updatedConfig;
     } catch (error) {
       console.error(`保存区域${regionId}配置失败:`, error);
@@ -114,8 +204,9 @@ export class KVStorageService {
    */
   async saveAllRegionConfigs(configs) {
     try {
+      const kv = await this.getKV();
       const timestamp = new Date().toISOString();
-      
+
       // 为每个配置添加元数据
       const processedConfigs = {};
       Object.entries(configs).forEach(([regionId, config]) => {
@@ -125,20 +216,18 @@ export class KVStorageService {
           lastUpdated: timestamp,
           metadata: {
             ...config.metadata,
-            version: '2.1.0',
-            batchUpdated: true
+            version: '3.0.0',
+            batchUpdated: true,
+            source: 'server'
           }
         };
       });
 
-      await this.kv.set(KV_KEYS.REGION_CONFIGS, processedConfigs);
-      
-      // 记录操作日志
-      await this.logOperation('batch_update', 'region_configs', 'all', processedConfigs);
-      
+      await kv.set(KV_KEYS.REGION_CONFIGS, processedConfigs);
+
       // 清除统计缓存
-      await this.kv.del(KV_KEYS.STATS_CACHE);
-      
+      await kv.del(KV_KEYS.STATS_CACHE);
+
       return processedConfigs;
     } catch (error) {
       console.error('批量保存区域配置失败:', error);

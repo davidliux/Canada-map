@@ -257,6 +257,12 @@ export class ServerStorageService {
         }
       };
     }
+
+    // 自动保存默认配置到服务器
+    this.saveAllRegionConfigs(regions).catch(error => {
+      console.warn('保存默认配置失败:', error.message);
+    });
+
     return regions;
   }
 
