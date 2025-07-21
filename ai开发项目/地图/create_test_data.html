@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创建测试数据</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .info {
+            color: #00ccff;
+        }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>创建测试数据 - 模拟170个邮编问题</h1>
+        
+        <div class="section">
+            <h2>操作面板</h2>
+            <button onclick="createLegacyFSAData()">创建旧FSA系统数据（170个邮编）</button>
+            <button onclick="createRegionConfigs()">创建区域配置</button>
+            <button onclick="clearAllData()">清空所有数据</button>
+            <button onclick="checkData()">检查当前数据</button>
+        </div>
+
+        <div class="section">
+            <h2>操作日志</h2>
+            <div id="log"></div>
+        </div>
+
+        <div class="section">
+            <h2>当前数据状态</h2>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function createLegacyFSAData() {
+            try {
+                log('开始创建旧FSA系统数据...');
+                
+                // 创建FSA配置数据，模拟170个邮编
+                const fsaConfigs = {
+                    'V6B': {
+                        fsaCode: 'V6B',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Vancouver',
+                        postalCodes: generatePostalCodes('V6B', 20),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V6C': {
+                        fsaCode: 'V6C',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Vancouver',
+                        postalCodes: generatePostalCodes('V6C', 25),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V5K': {
+                        fsaCode: 'V5K',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Vancouver',
+                        postalCodes: generatePostalCodes('V5K', 30),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V7A': {
+                        fsaCode: 'V7A',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'North Vancouver',
+                        postalCodes: generatePostalCodes('V7A', 35),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V7B': {
+                        fsaCode: 'V7B',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'North Vancouver',
+                        postalCodes: generatePostalCodes('V7B', 40),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V8A': {
+                        fsaCode: 'V8A',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Victoria',
+                        postalCodes: generatePostalCodes('V8A', 20),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    }
+                };
+
+                localStorage.setItem('fsa_configurations', JSON.stringify(fsaConfigs));
+                
+                // 计算总邮编数
+                let totalPostalCodes = 0;
+                Object.values(fsaConfigs).forEach(config => {
+                    totalPostalCodes += config.postalCodes.length;
+                });
+                
+                log(`创建了 ${Object.keys(fsaConfigs).length} 个FSA配置，总共 ${totalPostalCodes} 个邮编`, 'success');
+                checkData();
+                
+            } catch (error) {
+                log(`创建FSA数据失败: ${error.message}`, 'error');
+            }
+        }
+
+        function createRegionConfigs() {
+            try {
+                log('开始创建区域配置...');
+                
+                const regionConfigs = {
+                    '1': {
+                        id: '1',
+                        name: '区域1',
+                        isActive: true,
+                        fsaCodes: ['V6B', 'V6C', 'V5K', 'V7A', 'V7B', 'V8A'],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '2': {
+                        id: '2',
+                        name: '区域2',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '3': {
+                        id: '3',
+                        name: '区域3',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '4': {
+                        id: '4',
+                        name: '区域4',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '5': {
+                        id: '5',
+                        name: '区域5',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '6': {
+                        id: '6',
+                        name: '区域6',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '7': {
+                        id: '7',
+                        name: '区域7',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '8': {
+                        id: '8',
+                        name: '区域8',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    }
+                };
+
+                localStorage.setItem('region_configurations', JSON.stringify(regionConfigs));
+                log('区域配置创建成功', 'success');
+                checkData();
+                
+            } catch (error) {
+                log(`创建区域配置失败: ${error.message}`, 'error');
+            }
+        }
+
+        function generatePostalCodes(fsaCode, count) {
+            const codes = [];
+            for (let i = 1; i <= count; i++) {
+                const suffix = String(i).padStart(3, '0');
+                codes.push(`${fsaCode} ${suffix}`);
+            }
+            return codes;
+        }
+
+        function clearAllData() {
+            if (confirm('确定要清空所有LocalStorage数据吗？')) {
+                localStorage.clear();
+                log('所有数据已清空', 'success');
+                checkData();
+            }
+        }
+
+        function checkData() {
+            const statusDiv = document.getElementById('status');
+            let html = '<pre>';
+            
+            // 检查FSA配置
+            const fsaData = localStorage.getItem('fsa_configurations');
+            if (fsaData) {
+                const fsaConfigs = JSON.parse(fsaData);
+                let totalPostalCodes = 0;
+                Object.values(fsaConfigs).forEach(config => {
+                    totalPostalCodes += config.postalCodes ? config.postalCodes.length : 0;
+                });
+                html += `FSA配置: ${Object.keys(fsaConfigs).length} 个FSA，${totalPostalCodes} 个邮编\n`;
+            } else {
+                html += 'FSA配置: 不存在\n';
+            }
+            
+            // 检查区域配置
+            const regionData = localStorage.getItem('region_configurations');
+            if (regionData) {
+                const regionConfigs = JSON.parse(regionData);
+                html += `区域配置: ${Object.keys(regionConfigs).length} 个区域\n`;
+            } else {
+                html += '区域配置: 不存在\n';
+            }
+            
+            // 检查新格式的区域邮编数据
+            html += '\n新格式区域邮编数据:\n';
+            for (let i = 1; i <= 8; i++) {
+                const key = `region_${i}_postal_codes`;
+                const data = localStorage.getItem(key);
+                if (data) {
+                    const codes = JSON.parse(data);
+                    html += `  区域${i}: ${codes.length} 个邮编\n`;
+                } else {
+                    html += `  区域${i}: 不存在\n`;
+                }
+            }
+            
+            html += '</pre>';
+            statusDiv.innerHTML = html;
+        }
+
+        // 页面加载时检查数据
+        window.onload = function() {
+            checkData();
+        };
+    </script>
+</body>
+</html>

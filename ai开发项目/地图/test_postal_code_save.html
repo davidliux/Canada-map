@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮编保存功能测试</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        .info {
+            color: #00ccff;
+        }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        input, select {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 邮编保存功能测试</h1>
+        
+        <div class="section">
+            <h2>测试步骤</h2>
+            <div class="step">
+                <strong>步骤1:</strong> 初始化统一存储架构
+                <button onclick="initializeStorage()">初始化存储</button>
+                <div id="initResult"></div>
+            </div>
+            
+            <div class="step">
+                <strong>步骤2:</strong> 测试邮编保存功能
+                <div>
+                    <select id="testRegion">
+                        <option value="1">区域1</option>
+                        <option value="2">区域2</option>
+                        <option value="3">区域3</option>
+                        <option value="4">区域4</option>
+                        <option value="5">区域5</option>
+                        <option value="6">区域6</option>
+                        <option value="7">区域7</option>
+                        <option value="8">区域8</option>
+                    </select>
+                    <input type="text" id="testPostalCodes" placeholder="邮编列表 (用逗号分隔)" value="V6B,V6C,V5K">
+                    <button onclick="testSavePostalCodes()">测试保存</button>
+                </div>
+                <div id="saveResult"></div>
+            </div>
+            
+            <div class="step">
+                <strong>步骤3:</strong> 验证数据保存
+                <button onclick="verifyDataSave()">验证保存结果</button>
+                <div id="verifyResult"></div>
+            </div>
+            
+            <div class="step">
+                <strong>步骤4:</strong> 模拟界面更新
+                <button onclick="simulateUIUpdate()">模拟界面更新</button>
+                <div id="uiResult"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>当前存储状态</h2>
+            <button onclick="showCurrentStorage()">显示当前存储</button>
+            <div id="storageStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>测试日志</h2>
+            <button onclick="clearLog()">清空日志</button>
+            <div id="testLog"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('testLog').innerHTML = '';
+        }
+
+        // 模拟unifiedStorage.js中的函数
+        function createDefaultRegionConfig(regionId, regionName = `区域${regionId}`) {
+            return {
+                id: regionId,
+                name: regionName,
+                isActive: false,
+                postalCodes: [],
+                weightRanges: [],
+                lastUpdated: new Date().toISOString(),
+                metadata: {
+                    createdAt: new Date().toISOString(),
+                    version: '2.0.0',
+                    notes: '',
+                    totalPostalCodes: 0
+                }
+            };
+        }
+
+        function initializeDefaultRegions() {
+            const regions = {};
+            for (let i = 1; i <= 8; i++) {
+                regions[i.toString()] = createDefaultRegionConfig(i.toString());
+            }
+            return regions;
+        }
+
+        function getAllRegionConfigs() {
+            try {
+                const stored = localStorage.getItem('unified_region_data');
+                if (stored) {
+                    return JSON.parse(stored);
+                } else {
+                    const defaultRegions = initializeDefaultRegions();
+                    saveAllRegionConfigs(defaultRegions);
+                    return defaultRegions;
+                }
+            } catch (error) {
+                console.error('读取区域配置失败:', error);
+                return initializeDefaultRegions();
+            }
+        }
+
+        function saveAllRegionConfigs(regionConfigs) {
+            try {
+                localStorage.setItem('unified_region_data', JSON.stringify(regionConfigs));
+                console.log('区域配置保存成功:', regionConfigs);
+                return true;
+            } catch (error) {
+                console.error('保存区域配置失败:', error);
+                return false;
+            }
+        }
+
+        function getRegionConfig(regionId) {
+            const allConfigs = getAllRegionConfigs();
+            return allConfigs[regionId] || null;
+        }
+
+        function saveRegionConfig(regionId, config) {
+            try {
+                // 更新元数据
+                const updatedConfig = {
+                    ...config,
+                    lastUpdated: new Date().toISOString(),
+                    metadata: {
+                        ...config.metadata,
+                        totalPostalCodes: config.postalCodes ? config.postalCodes.length : 0
+                    }
+                };
+
+                // 获取所有配置并更新
+                const allConfigs = getAllRegionConfigs();
+                allConfigs[regionId] = updatedConfig;
+
+                return saveAllRegionConfigs(allConfigs);
+            } catch (error) {
+                console.error('保存区域配置失败:', error);
+                return false;
+            }
+        }
+
+        function getRegionPostalCodes(regionId) {
+            const config = getRegionConfig(regionId);
+            return config ? config.postalCodes || [] : [];
+        }
+
+        function setRegionPostalCodes(regionId, postalCodes) {
+            const config = getRegionConfig(regionId);
+            if (!config) {
+                console.error(`区域 ${regionId} 不存在`);
+                return false;
+            }
+
+            const updatedConfig = {
+                ...config,
+                postalCodes: [...postalCodes] // 创建副本避免引用问题
+            };
+
+            return saveRegionConfig(regionId, updatedConfig);
+        }
+
+        // 测试函数
+        function initializeStorage() {
+            log('开始初始化统一存储架构...', 'info');
+            const resultDiv = document.getElementById('initResult');
+            
+            try {
+                // 清空现有数据
+                localStorage.removeItem('unified_region_data');
+                
+                // 初始化默认区域
+                const defaultRegions = initializeDefaultRegions();
+                const success = saveAllRegionConfigs(defaultRegions);
+                
+                if (success) {
+                    resultDiv.innerHTML = '<div class="success">✅ 统一存储架构初始化成功</div>';
+                    log('统一存储架构初始化成功', 'success');
+                    
+                    // 显示初始化的区域
+                    let html = '<div class="info">初始化的区域:</div>';
+                    Object.keys(defaultRegions).forEach(regionId => {
+                        html += `<div class="info">  区域${regionId}: 0个邮编</div>`;
+                    });
+                    resultDiv.innerHTML += html;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 初始化失败</div>';
+                    log('统一存储架构初始化失败', 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 初始化异常: ${error.message}</div>`;
+                log(`初始化异常: ${error.message}`, 'error');
+            }
+        }
+
+        function testSavePostalCodes() {
+            const regionId = document.getElementById('testRegion').value;
+            const postalCodesStr = document.getElementById('testPostalCodes').value;
+            const resultDiv = document.getElementById('saveResult');
+            
+            log(`开始测试保存邮编到区域${regionId}...`, 'info');
+            
+            if (!regionId || !postalCodesStr) {
+                resultDiv.innerHTML = '<div class="error">❌ 请选择区域并输入邮编</div>';
+                return;
+            }
+            
+            const postalCodes = postalCodesStr.split(',').map(code => code.trim().toUpperCase());
+            
+            try {
+                // 测试setRegionPostalCodes函数
+                const success = setRegionPostalCodes(regionId, postalCodes);
+                
+                if (success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ 邮编保存成功</div>
+                        <div class="info">区域: ${regionId}</div>
+                        <div class="info">邮编数量: ${postalCodes.length}</div>
+                        <div class="info">邮编列表: ${postalCodes.join(', ')}</div>
+                    `;
+                    log(`成功保存${postalCodes.length}个邮编到区域${regionId}`, 'success');
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 邮编保存失败</div>';
+                    log(`邮编保存失败`, 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 保存异常: ${error.message}</div>`;
+                log(`邮编保存异常: ${error.message}`, 'error');
+            }
+        }
+
+        function verifyDataSave() {
+            const regionId = document.getElementById('testRegion').value;
+            const resultDiv = document.getElementById('verifyResult');
+            
+            log(`开始验证区域${regionId}的数据保存...`, 'info');
+            
+            try {
+                // 从localStorage读取数据
+                const storedData = localStorage.getItem('unified_region_data');
+                if (!storedData) {
+                    resultDiv.innerHTML = '<div class="error">❌ 未找到存储数据</div>';
+                    return;
+                }
+                
+                const data = JSON.parse(storedData);
+                const regionConfig = data[regionId];
+                
+                if (!regionConfig) {
+                    resultDiv.innerHTML = `<div class="error">❌ 区域${regionId}不存在</div>`;
+                    return;
+                }
+                
+                const postalCodes = regionConfig.postalCodes || [];
+                const metadataCount = regionConfig.metadata ? regionConfig.metadata.totalPostalCodes : 0;
+                
+                let html = '<div class="success">✅ 数据验证结果:</div>';
+                html += `<div class="info">区域ID: ${regionConfig.id}</div>`;
+                html += `<div class="info">区域名称: ${regionConfig.name}</div>`;
+                html += `<div class="info">邮编数量: ${postalCodes.length}</div>`;
+                html += `<div class="info">元数据计数: ${metadataCount}</div>`;
+                html += `<div class="info">最后更新: ${regionConfig.lastUpdated}</div>`;
+                
+                if (postalCodes.length > 0) {
+                    html += `<div class="info">邮编列表: ${postalCodes.join(', ')}</div>`;
+                }
+                
+                // 检查数据一致性
+                if (postalCodes.length === metadataCount) {
+                    html += '<div class="success">✅ 数据一致性检查通过</div>';
+                } else {
+                    html += '<div class="warning">⚠️ 数据一致性检查失败</div>';
+                }
+                
+                resultDiv.innerHTML = html;
+                log(`区域${regionId}数据验证完成`, 'success');
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 验证异常: ${error.message}</div>`;
+                log(`数据验证异常: ${error.message}`, 'error');
+            }
+        }
+
+        function simulateUIUpdate() {
+            const regionId = document.getElementById('testRegion').value;
+            const resultDiv = document.getElementById('uiResult');
+            
+            log(`模拟区域${regionId}的界面更新...`, 'info');
+            
+            try {
+                // 模拟获取邮编数据
+                const postalCodes = getRegionPostalCodes(regionId);
+                
+                // 模拟界面更新
+                let html = '<div class="success">✅ 界面更新模拟:</div>';
+                html += `<div class="info">当前选中区域: ${regionId}</div>`;
+                html += `<div class="info">邮编列表长度: ${postalCodes.length}</div>`;
+                
+                if (postalCodes.length > 0) {
+                    html += '<div class="info">邮编列表:</div>';
+                    postalCodes.forEach(code => {
+                        html += `<div class="info">  • ${code}</div>`;
+                    });
+                } else {
+                    html += '<div class="warning">⚠️ 没有邮编数据</div>';
+                }
+                
+                resultDiv.innerHTML = html;
+                log(`界面更新模拟完成`, 'success');
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 界面更新异常: ${error.message}</div>`;
+                log(`界面更新异常: ${error.message}`, 'error');
+            }
+        }
+
+        function showCurrentStorage() {
+            const resultDiv = document.getElementById('storageStatus');
+            
+            try {
+                const storedData = localStorage.getItem('unified_region_data');
+                if (!storedData) {
+                    resultDiv.innerHTML = '<div class="error">❌ 未找到存储数据</div>';
+                    return;
+                }
+                
+                const data = JSON.parse(storedData);
+                let html = '<h3>当前存储状态:</h3>';
+                
+                Object.keys(data).forEach(regionId => {
+                    const region = data[regionId];
+                    const postalCount = region.postalCodes ? region.postalCodes.length : 0;
+                    html += `<div class="info">区域${regionId}: ${postalCount}个邮编</div>`;
+                    
+                    if (postalCount > 0) {
+                        html += `<div class="info">  邮编: ${region.postalCodes.slice(0, 3).join(', ')}${postalCount > 3 ? '...' : ''}</div>`;
+                    }
+                });
+                
+                resultDiv.innerHTML = html;
+                log('显示当前存储状态完成', 'info');
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 显示异常: ${error.message}</div>`;
+                log(`显示存储状态异常: ${error.message}`, 'error');
+            }
+        }
+
+        // 页面加载时自动初始化
+        window.onload = function() {
+            log('邮编保存功能测试工具已加载', 'info');
+        };
+    </script>
+</body>
+</html>

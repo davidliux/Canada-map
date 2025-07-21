@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮编数据同步调试工具</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        .info {
+            color: #00ccff;
+        }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        input {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 邮编数据同步调试工具</h1>
+        
+        <div class="section">
+            <h2>快速诊断</h2>
+            <button onclick="runFullDiagnosis()">运行完整诊断</button>
+            <button onclick="checkUnifiedStorage()">检查统一存储</button>
+            <button onclick="testPostalCodeSave()">测试邮编保存</button>
+            <button onclick="clearAllData()">清空所有数据</button>
+        </div>
+
+        <div class="grid">
+            <div class="section">
+                <h2>1. 区域初始化检查</h2>
+                <button onclick="checkRegionInitialization()">检查区域初始化</button>
+                <div id="regionInitResult"></div>
+            </div>
+
+            <div class="section">
+                <h2>2. 邮编保存测试</h2>
+                <input type="text" id="testRegionId" placeholder="区域ID (1-8)" value="1">
+                <input type="text" id="testPostalCodes" placeholder="邮编列表 (用逗号分隔)" value="V6B,V6C,V5K">
+                <button onclick="testSavePostalCodes()">测试保存邮编</button>
+                <div id="saveTestResult"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. localStorage数据检查</h2>
+            <button onclick="showUnifiedStorageData()">显示unified_region_data</button>
+            <button onclick="showAllStorageKeys()">显示所有存储键</button>
+            <div id="storageData"></div>
+        </div>
+
+        <div class="section">
+            <h2>4. 数据同步验证</h2>
+            <button onclick="validateDataSync()">验证数据同步</button>
+            <div id="syncValidation"></div>
+        </div>
+
+        <div class="section">
+            <h2>调试日志</h2>
+            <button onclick="clearLog()">清空日志</button>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function checkRegionInitialization() {
+            log('开始检查区域初始化...', 'info');
+            
+            const resultDiv = document.getElementById('regionInitResult');
+            const unifiedData = localStorage.getItem('unified_region_data');
+            
+            if (!unifiedData) {
+                resultDiv.innerHTML = '<div class="error">❌ 未找到unified_region_data</div>';
+                log('未找到unified_region_data，需要初始化', 'error');
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(unifiedData);
+                const regions = Object.keys(data);
+                
+                let html = '<div class="success">✅ 找到统一存储数据</div>';
+                html += `<div class="info">区域数量: ${regions.length}</div>`;
+                
+                // 检查每个区域
+                for (let i = 1; i <= 8; i++) {
+                    const regionId = i.toString();
+                    if (data[regionId]) {
+                        const region = data[regionId];
+                        const postalCount = region.postalCodes ? region.postalCodes.length : 0;
+                        html += `<div class="success">区域${regionId}: ✅ 存在, ${postalCount}个邮编</div>`;
+                        
+                        if (postalCount > 0) {
+                            html += `<div class="info">  邮编: ${region.postalCodes.slice(0, 3).join(', ')}${postalCount > 3 ? '...' : ''}</div>`;
+                        }
+                    } else {
+                        html += `<div class="error">区域${regionId}: ❌ 不存在</div>`;
+                    }
+                }
+                
+                resultDiv.innerHTML = html;
+                log(`区域初始化检查完成，找到${regions.length}个区域`, 'success');
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 数据解析失败: ${error.message}</div>`;
+                log(`数据解析失败: ${error.message}`, 'error');
+            }
+        }
+
+        function testSavePostalCodes() {
+            const regionId = document.getElementById('testRegionId').value;
+            const postalCodesStr = document.getElementById('testPostalCodes').value;
+            const resultDiv = document.getElementById('saveTestResult');
+            
+            log(`开始测试保存邮编到区域${regionId}...`, 'info');
+            
+            if (!regionId || !postalCodesStr) {
+                resultDiv.innerHTML = '<div class="error">❌ 请输入区域ID和邮编</div>';
+                return;
+            }
+            
+            const postalCodes = postalCodesStr.split(',').map(code => code.trim());
+            
+            try {
+                // 模拟setRegionPostalCodes函数
+                const unifiedData = localStorage.getItem('unified_region_data');
+                if (!unifiedData) {
+                    resultDiv.innerHTML = '<div class="error">❌ 统一存储数据不存在</div>';
+                    return;
+                }
+                
+                const data = JSON.parse(unifiedData);
+                
+                if (!data[regionId]) {
+                    resultDiv.innerHTML = `<div class="error">❌ 区域${regionId}不存在</div>`;
+                    return;
+                }
+                
+                // 更新邮编数据
+                data[regionId].postalCodes = [...postalCodes];
+                data[regionId].lastUpdated = new Date().toISOString();
+                data[regionId].metadata.totalPostalCodes = postalCodes.length;
+                
+                // 保存回localStorage
+                localStorage.setItem('unified_region_data', JSON.stringify(data));
+                
+                resultDiv.innerHTML = `
+                    <div class="success">✅ 邮编保存成功</div>
+                    <div class="info">区域: ${regionId}</div>
+                    <div class="info">邮编数量: ${postalCodes.length}</div>
+                    <div class="info">邮编列表: ${postalCodes.join(', ')}</div>
+                `;
+                
+                log(`成功保存${postalCodes.length}个邮编到区域${regionId}`, 'success');
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 保存失败: ${error.message}</div>`;
+                log(`邮编保存失败: ${error.message}`, 'error');
+            }
+        }
+
+        function showUnifiedStorageData() {
+            const resultDiv = document.getElementById('storageData');
+            const unifiedData = localStorage.getItem('unified_region_data');
+            
+            if (!unifiedData) {
+                resultDiv.innerHTML = '<div class="error">❌ 未找到unified_region_data</div>';
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(unifiedData);
+                resultDiv.innerHTML = `
+                    <h3>unified_region_data内容:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                log('显示统一存储数据完成', 'info');
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 数据解析失败: ${error.message}</div>`;
+            }
+        }
+
+        function showAllStorageKeys() {
+            const resultDiv = document.getElementById('storageData');
+            const keys = Object.keys(localStorage);
+            
+            let html = '<h3>所有localStorage键:</h3>';
+            keys.forEach(key => {
+                const value = localStorage.getItem(key);
+                const size = value ? value.length : 0;
+                html += `<div class="info">${key}: ${size} 字符</div>`;
+            });
+            
+            resultDiv.innerHTML = html;
+            log(`找到${keys.length}个localStorage键`, 'info');
+        }
+
+        function validateDataSync() {
+            const resultDiv = document.getElementById('syncValidation');
+            log('开始验证数据同步...', 'info');
+            
+            try {
+                const unifiedData = localStorage.getItem('unified_region_data');
+                if (!unifiedData) {
+                    resultDiv.innerHTML = '<div class="error">❌ 统一存储数据不存在</div>';
+                    return;
+                }
+                
+                const data = JSON.parse(unifiedData);
+                let html = '<h3>数据同步验证结果:</h3>';
+                let totalPostalCodes = 0;
+                let activeRegions = 0;
+                
+                for (let i = 1; i <= 8; i++) {
+                    const regionId = i.toString();
+                    const region = data[regionId];
+                    
+                    if (region) {
+                        const postalCount = region.postalCodes ? region.postalCodes.length : 0;
+                        const metadataCount = region.metadata ? region.metadata.totalPostalCodes : 0;
+                        
+                        totalPostalCodes += postalCount;
+                        if (region.isActive) activeRegions++;
+                        
+                        const syncStatus = postalCount === metadataCount ? '✅' : '❌';
+                        html += `<div>区域${regionId}: ${syncStatus} 邮编${postalCount}个, 元数据${metadataCount}个</div>`;
+                        
+                        if (postalCount !== metadataCount) {
+                            html += `<div class="warning">  ⚠️ 数据不同步</div>`;
+                        }
+                    } else {
+                        html += `<div class="error">区域${regionId}: ❌ 不存在</div>`;
+                    }
+                }
+                
+                html += `<div class="info">总计: ${totalPostalCodes}个邮编, ${activeRegions}个活跃区域</div>`;
+                resultDiv.innerHTML = html;
+                
+                log(`数据同步验证完成，总计${totalPostalCodes}个邮编`, 'success');
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 验证失败: ${error.message}</div>`;
+                log(`数据同步验证失败: ${error.message}`, 'error');
+            }
+        }
+
+        function checkUnifiedStorage() {
+            log('检查统一存储架构...', 'info');
+            
+            const unifiedData = localStorage.getItem('unified_region_data');
+            if (!unifiedData) {
+                log('统一存储数据不存在，正在初始化...', 'warning');
+                initializeUnifiedStorage();
+            } else {
+                log('统一存储数据存在', 'success');
+                checkRegionInitialization();
+            }
+        }
+
+        function initializeUnifiedStorage() {
+            log('开始初始化统一存储架构...', 'info');
+            
+            const defaultRegions = {};
+            for (let i = 1; i <= 8; i++) {
+                defaultRegions[i.toString()] = {
+                    id: i.toString(),
+                    name: `区域${i}`,
+                    isActive: false,
+                    postalCodes: [],
+                    weightRanges: [],
+                    lastUpdated: new Date().toISOString(),
+                    metadata: {
+                        createdAt: new Date().toISOString(),
+                        version: '2.0.0',
+                        notes: '调试工具初始化',
+                        totalPostalCodes: 0
+                    }
+                };
+            }
+            
+            localStorage.setItem('unified_region_data', JSON.stringify(defaultRegions));
+            log('统一存储架构初始化完成', 'success');
+            checkRegionInitialization();
+        }
+
+        function testPostalCodeSave() {
+            log('测试邮编保存功能...', 'info');
+            
+            // 测试保存邮编到区域1
+            document.getElementById('testRegionId').value = '1';
+            document.getElementById('testPostalCodes').value = 'V6B,V6C,V5K';
+            testSavePostalCodes();
+        }
+
+        function runFullDiagnosis() {
+            log('开始运行完整诊断...', 'info');
+            
+            // 清空之前的结果
+            document.getElementById('regionInitResult').innerHTML = '';
+            document.getElementById('saveTestResult').innerHTML = '';
+            document.getElementById('storageData').innerHTML = '';
+            document.getElementById('syncValidation').innerHTML = '';
+            
+            // 运行所有检查
+            setTimeout(() => checkUnifiedStorage(), 100);
+            setTimeout(() => showUnifiedStorageData(), 500);
+            setTimeout(() => validateDataSync(), 800);
+            setTimeout(() => testPostalCodeSave(), 1200);
+            
+            setTimeout(() => {
+                log('完整诊断完成', 'success');
+            }, 1500);
+        }
+
+        function clearAllData() {
+            if (confirm('确定要清空所有localStorage数据吗？')) {
+                localStorage.clear();
+                log('所有数据已清空', 'warning');
+                
+                // 清空显示
+                document.getElementById('regionInitResult').innerHTML = '';
+                document.getElementById('saveTestResult').innerHTML = '';
+                document.getElementById('storageData').innerHTML = '';
+                document.getElementById('syncValidation').innerHTML = '';
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            log('邮编数据同步调试工具已加载', 'info');
+            checkUnifiedStorage();
+        };
+    </script>
+</body>
+</html>

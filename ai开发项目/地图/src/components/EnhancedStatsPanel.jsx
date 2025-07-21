@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Package, 
-  MapPin, 
-  BarChart3, 
-  Truck, 
+import {
+  Package,
+  MapPin,
+  BarChart3,
+  Truck,
   Activity,
   TrendingUp,
   Globe,
@@ -15,53 +15,133 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { getDeliveryStats, getFSAsByProvince } from '../data/deliverableFSA';
+import { getAllRegionConfigs, getStorageStats } from '../utils/unifiedStorage';
+import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 
 const EnhancedStatsPanel = () => {
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  useEffect(() => {
-    const loadStats = () => {
-      setIsLoading(true);
-      setTimeout(() => {
-        const deliveryStats = getDeliveryStats();
-        const fsasByProvince = getFSAsByProvince();
-        
-        // 计算覆盖率 (基于统计局1643个总FSA)
-        const totalCanadianFSAs = 1643;
-        const coverageRate = ((deliveryStats.total / totalCanadianFSAs) * 100).toFixed(2);
-        
-        setStats({
-          ...deliveryStats,
-          coverageRate,
-          totalCanadianFSAs,
-          fsasByProvince
+  // 计算统一存储架构中的实际配送区域数据
+  const calculateUnifiedStats = () => {
+    try {
+      const regionConfigs = getAllRegionConfigs();
+      const storageStats = getStorageStats();
+
+      console.log('📊 计算统计数据 - 区域配置:', regionConfigs);
+      console.log('📊 存储统计:', storageStats);
+
+      // 统计所有区域中的FSA数量
+      let totalFSAs = 0;
+      let activeFSAs = 0;
+      const fsasByProvince = {
+        'BC': 0, 'ON': 0, 'QC': 0, 'AB': 0, 'MB': 0,
+        'SK': 0, 'NS': 0, 'NB': 0, 'NL': 0, 'PE': 0,
+        'YT': 0, 'NT': 0, 'NU': 0
+      };
+
+      // 确保regionConfigs是对象且不为空
+      if (regionConfigs && typeof regionConfigs === 'object') {
+        Object.values(regionConfigs).forEach(config => {
+          if (config && config.postalCodes && Array.isArray(config.postalCodes)) {
+            totalFSAs += config.postalCodes.length;
+
+            if (config.isActive) {
+              activeFSAs += config.postalCodes.length;
+            }
+
+            // 按省份分类FSA
+            config.postalCodes.forEach(fsa => {
+              if (typeof fsa === 'string' && fsa.length > 0) {
+                const firstChar = fsa.charAt(0).toUpperCase();
+                switch (firstChar) {
+                  case 'V': fsasByProvince.BC++; break;
+                  case 'T': fsasByProvince.AB++; break;
+                  case 'S': fsasByProvince.SK++; break;
+                  case 'R': fsasByProvince.MB++; break;
+                  case 'P': case 'N': case 'K': case 'L': case 'M':
+                    fsasByProvince.ON++; break;
+                  case 'H': case 'J': case 'G':
+                    fsasByProvince.QC++; break;
+                  case 'E': fsasByProvince.NB++; break;
+                  case 'B': fsasByProvince.NS++; break;
+                  case 'C': fsasByProvince.PE++; break;
+                  case 'A': fsasByProvince.NL++; break;
+                  case 'Y': fsasByProvince.YT++; break;
+                  case 'X': fsasByProvince.NT++; break;
+                  default: fsasByProvince.ON++; break;
+                }
+              }
+            });
+          }
         });
-        setIsLoading(false);
-        setLastUpdate(new Date());
-      }, 1000);
-    };
+      }
 
-    loadStats();
-  }, []);
+      const result = {
+        total: totalFSAs,
+        activeFSAs,
+        byProvince: fsasByProvince,
+        regionCount: storageStats?.regionCount || 0,
+        activeRegions: storageStats?.activeRegions || 0
+      };
 
-  const handleRefresh = () => {
-    setStats(null);
+      console.log('📊 计算结果:', result);
+      return result;
+
+    } catch (error) {
+      console.error('❌ 计算统计数据失败:', error);
+
+      // 返回默认值避免界面崩溃
+      return {
+        total: 0,
+        activeFSAs: 0,
+        byProvince: {
+          'BC': 0, 'ON': 0, 'QC': 0, 'AB': 0, 'MB': 0,
+          'SK': 0, 'NS': 0, 'NB': 0, 'NL': 0, 'PE': 0,
+          'YT': 0, 'NT': 0, 'NU': 0
+        },
+        regionCount: 0,
+        activeRegions: 0
+      };
+    }
+  };
+
+  const loadStats = () => {
     setIsLoading(true);
     setTimeout(() => {
-      const deliveryStats = getDeliveryStats();
+      // 使用统一存储架构的数据
+      const unifiedStats = calculateUnifiedStats();
+
+      // 计算覆盖率 (基于统计局1643个总FSA)
       const totalCanadianFSAs = 1643;
-      const coverageRate = ((deliveryStats.total / totalCanadianFSAs) * 100).toFixed(2);
-      
+      const coverageRate = ((unifiedStats.total / totalCanadianFSAs) * 100).toFixed(2);
+
       setStats({
-        ...deliveryStats,
+        ...unifiedStats,
         coverageRate,
         totalCanadianFSAs
       });
       setIsLoading(false);
       setLastUpdate(new Date());
-    }, 1000);
+    }, 500);
+  };
+
+  useEffect(() => {
+    loadStats();
+
+    // 监听数据更新通知
+    const unsubscribe = dataUpdateNotifier.subscribe((updateInfo) => {
+      console.log('EnhancedStatsPanel收到数据更新通知:', updateInfo);
+      loadStats();
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const handleRefresh = () => {
+    setStats(null);
+    loadStats();
   };
 
   if (isLoading || !stats) {

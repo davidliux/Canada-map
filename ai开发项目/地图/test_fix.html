@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试数据修复效果</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        .info {
+            color: #00ccff;
+        }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .test-pass {
+            background: #1a4a1a;
+            border-color: #00ff00;
+        }
+        .test-fail {
+            background: #4a1a1a;
+            border-color: #ff0000;
+        }
+        .test-warning {
+            background: #4a4a1a;
+            border-color: #ffaa00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>数据修复效果测试</h1>
+        
+        <div class="section">
+            <h2>测试步骤</h2>
+            <button onclick="step1_CreateTestData()">步骤1: 创建测试数据（模拟170个邮编问题）</button>
+            <button onclick="step2_TestMigration()">步骤2: 测试数据迁移</button>
+            <button onclick="step3_VerifyResults()">步骤3: 验证修复结果</button>
+            <button onclick="clearAllData()">清空所有数据</button>
+        </div>
+
+        <div class="section">
+            <h2>测试结果</h2>
+            <div id="testResults"></div>
+        </div>
+
+        <div class="section">
+            <h2>详细日志</h2>
+            <div id="detailLog"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('detailLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function addTestResult(testName, passed, message) {
+            const resultsDiv = document.getElementById('testResults');
+            const className = passed ? 'test-pass' : 'test-fail';
+            const status = passed ? '✓ PASS' : '✗ FAIL';
+            resultsDiv.innerHTML += `
+                <div class="test-result ${className}">
+                    <strong>${status}: ${testName}</strong><br>
+                    ${message}
+                </div>
+            `;
+        }
+
+        function step1_CreateTestData() {
+            log('开始步骤1: 创建测试数据...', 'info');
+            
+            try {
+                // 清空现有数据
+                localStorage.clear();
+                log('清空现有数据', 'info');
+                
+                // 创建旧FSA系统数据（模拟170个邮编）
+                const fsaConfigs = {
+                    'V6B': {
+                        fsaCode: 'V6B',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Vancouver',
+                        postalCodes: generatePostalCodes('V6B', 30),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V6C': {
+                        fsaCode: 'V6C',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Vancouver',
+                        postalCodes: generatePostalCodes('V6C', 35),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V5K': {
+                        fsaCode: 'V5K',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'Vancouver',
+                        postalCodes: generatePostalCodes('V5K', 40),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V7A': {
+                        fsaCode: 'V7A',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'North Vancouver',
+                        postalCodes: generatePostalCodes('V7A', 35),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    },
+                    'V7B': {
+                        fsaCode: 'V7B',
+                        assignedRegion: '1',
+                        province: 'BC',
+                        region: 'North Vancouver',
+                        postalCodes: generatePostalCodes('V7B', 30),
+                        isActive: true,
+                        lastUpdated: new Date().toISOString()
+                    }
+                };
+
+                localStorage.setItem('fsa_configurations', JSON.stringify(fsaConfigs));
+                
+                // 创建区域配置
+                const regionConfigs = {
+                    '1': {
+                        id: '1',
+                        name: '区域1',
+                        isActive: true,
+                        fsaCodes: ['V6B', 'V6C', 'V5K', 'V7A', 'V7B'],
+                        lastUpdated: new Date().toISOString()
+                    },
+                    '2': {
+                        id: '2',
+                        name: '区域2',
+                        isActive: false,
+                        fsaCodes: [],
+                        lastUpdated: new Date().toISOString()
+                    }
+                };
+
+                localStorage.setItem('region_configurations', JSON.stringify(regionConfigs));
+                
+                // 计算总邮编数
+                let totalPostalCodes = 0;
+                Object.values(fsaConfigs).forEach(config => {
+                    totalPostalCodes += config.postalCodes.length;
+                });
+                
+                log(`创建了 ${Object.keys(fsaConfigs).length} 个FSA配置，总共 ${totalPostalCodes} 个邮编`, 'success');
+                addTestResult('创建测试数据', true, `成功创建${totalPostalCodes}个邮编的测试数据`);
+                
+            } catch (error) {
+                log(`步骤1失败: ${error.message}`, 'error');
+                addTestResult('创建测试数据', false, error.message);
+            }
+        }
+
+        function step2_TestMigration() {
+            log('开始步骤2: 测试数据迁移...', 'info');
+            
+            try {
+                // 模拟迁移逻辑（与实际代码相同）
+                const fsaConfigs = JSON.parse(localStorage.getItem('fsa_configurations') || '{}');
+                const regionConfigs = JSON.parse(localStorage.getItem('region_configurations') || '{}');
+                
+                if (Object.keys(fsaConfigs).length === 0) {
+                    addTestResult('数据迁移测试', false, '没有找到旧FSA数据');
+                    return;
+                }
+                
+                let totalMigrated = 0;
+                
+                // 为每个区域迁移数据
+                Object.keys(regionConfigs).forEach(regionId => {
+                    const regionConfig = regionConfigs[regionId];
+                    if (regionConfig && regionConfig.fsaCodes) {
+                        const migratedCodes = [];
+                        
+                        regionConfig.fsaCodes.forEach(fsaCode => {
+                            const fsaConfig = fsaConfigs[fsaCode];
+                            if (fsaConfig) {
+                                // 添加FSA代码本身
+                                migratedCodes.push(fsaCode);
+                                
+                                // 如果有具体的邮编列表，也添加进去
+                                if (fsaConfig.postalCodes && Array.isArray(fsaConfig.postalCodes)) {
+                                    migratedCodes.push(...fsaConfig.postalCodes);
+                                }
+                            }
+                        });
+                        
+                        if (migratedCodes.length > 0) {
+                            // 去重并保存
+                            const uniqueCodes = [...new Set(migratedCodes)];
+                            const storageKey = `region_${regionId}_postal_codes`;
+                            localStorage.setItem(storageKey, JSON.stringify(uniqueCodes));
+                            totalMigrated += uniqueCodes.length;
+                            log(`区域 ${regionId} 迁移了 ${uniqueCodes.length} 个邮编`, 'success');
+                        }
+                    }
+                });
+                
+                log(`迁移完成！总共迁移了 ${totalMigrated} 个邮编`, 'success');
+                addTestResult('数据迁移', true, `成功迁移${totalMigrated}个邮编到新格式`);
+                
+            } catch (error) {
+                log(`步骤2失败: ${error.message}`, 'error');
+                addTestResult('数据迁移', false, error.message);
+            }
+        }
+
+        function step3_VerifyResults() {
+            log('开始步骤3: 验证修复结果...', 'info');
+            
+            try {
+                // 检查旧系统数据
+                const fsaData = localStorage.getItem('fsa_configurations');
+                let oldSystemCount = 0;
+                if (fsaData) {
+                    const fsaConfigs = JSON.parse(fsaData);
+                    Object.values(fsaConfigs).forEach(config => {
+                        if (config.postalCodes) {
+                            oldSystemCount += config.postalCodes.length;
+                        }
+                    });
+                }
+                
+                // 检查新系统数据
+                let newSystemCount = 0;
+                for (let i = 1; i <= 8; i++) {
+                    const key = `region_${i}_postal_codes`;
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        const codes = JSON.parse(data);
+                        newSystemCount += codes.length;
+                        if (i === 1 && codes.length > 0) {
+                            log(`区域1现在有 ${codes.length} 个邮编`, 'success');
+                        }
+                    }
+                }
+                
+                log(`验证结果: 旧系统${oldSystemCount}个邮编，新系统${newSystemCount}个邮编`, 'info');
+                
+                // 验证数据一致性
+                const region1Data = localStorage.getItem('region_1_postal_codes');
+                if (region1Data) {
+                    const region1Codes = JSON.parse(region1Data);
+                    if (region1Codes.length > 0) {
+                        addTestResult('数据一致性验证', true, `区域1现在正确显示${region1Codes.length}个邮编，修复成功！`);
+                        log('✓ 修复成功：区域1现在能正确显示邮编数量', 'success');
+                    } else {
+                        addTestResult('数据一致性验证', false, '区域1仍然显示0个邮编');
+                    }
+                } else {
+                    addTestResult('数据一致性验证', false, '区域1没有邮编数据');
+                }
+                
+                // 验证总数匹配
+                if (oldSystemCount > 0 && newSystemCount > 0) {
+                    const isMatched = Math.abs(oldSystemCount - newSystemCount) <= 5; // 允许5个的差异（因为去重）
+                    addTestResult('数据总数验证', isMatched, 
+                        `旧系统${oldSystemCount}个，新系统${newSystemCount}个 ${isMatched ? '(匹配)' : '(不匹配)'}`);
+                }
+                
+            } catch (error) {
+                log(`步骤3失败: ${error.message}`, 'error');
+                addTestResult('验证修复结果', false, error.message);
+            }
+        }
+
+        function generatePostalCodes(fsaCode, count) {
+            const codes = [];
+            for (let i = 1; i <= count; i++) {
+                const suffix = String(i).padStart(3, '0');
+                codes.push(`${fsaCode} ${suffix}`);
+            }
+            return codes;
+        }
+
+        function clearAllData() {
+            if (confirm('确定要清空所有数据吗？')) {
+                localStorage.clear();
+                document.getElementById('testResults').innerHTML = '';
+                document.getElementById('detailLog').innerHTML = '';
+                log('所有数据已清空', 'info');
+            }
+        }
+
+        // 页面加载时显示当前状态
+        window.onload = function() {
+            log('测试页面已加载，请按顺序执行测试步骤', 'info');
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalStorage 数据调试</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        .key {
+            color: #ffff00;
+            font-weight: bold;
+        }
+        .value {
+            color: #00ff00;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .count {
+            color: #ff6600;
+            font-weight: bold;
+        }
+        .error {
+            color: #ff0000;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .json-viewer {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LocalStorage 数据调试工具</h1>
+        
+        <div class="section">
+            <h2>操作面板</h2>
+            <button onclick="refreshData()">刷新数据</button>
+            <button onclick="clearAllData()">清空所有数据</button>
+            <button onclick="exportData()">导出数据</button>
+            <button onclick="analyzePostalCodes()">分析邮编数据</button>
+        </div>
+
+        <div class="section">
+            <h2>数据概览</h2>
+            <div id="overview"></div>
+        </div>
+
+        <div class="section">
+            <h2>区域邮编数据</h2>
+            <div id="regionPostalCodes"></div>
+        </div>
+
+        <div class="section">
+            <h2>FSA配置数据</h2>
+            <div id="fsaConfigs"></div>
+        </div>
+
+        <div class="section">
+            <h2>区域配置数据</h2>
+            <div id="regionConfigs"></div>
+        </div>
+
+        <div class="section">
+            <h2>所有LocalStorage数据</h2>
+            <div id="allData"></div>
+        </div>
+
+        <div class="section">
+            <h2>邮编数据分析</h2>
+            <div id="analysis"></div>
+        </div>
+    </div>
+
+    <script>
+        function refreshData() {
+            displayOverview();
+            displayRegionPostalCodes();
+            displayFSAConfigs();
+            displayRegionConfigs();
+            displayAllData();
+        }
+
+        function displayOverview() {
+            const overview = document.getElementById('overview');
+            const totalKeys = localStorage.length;
+            
+            let regionPostalKeys = 0;
+            let fsaKeys = 0;
+            let regionConfigKeys = 0;
+            let otherKeys = 0;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('region_') && key.endsWith('_postal_codes')) {
+                    regionPostalKeys++;
+                } else if (key === 'fsa_configurations') {
+                    fsaKeys++;
+                } else if (key === 'region_configurations') {
+                    regionConfigKeys++;
+                } else {
+                    otherKeys++;
+                }
+            }
+
+            overview.innerHTML = `
+                <div class="json-viewer">
+                    <div><span class="key">总键数:</span> <span class="count">${totalKeys}</span></div>
+                    <div><span class="key">区域邮编键:</span> <span class="count">${regionPostalKeys}</span></div>
+                    <div><span class="key">FSA配置键:</span> <span class="count">${fsaKeys}</span></div>
+                    <div><span class="key">区域配置键:</span> <span class="count">${regionConfigKeys}</span></div>
+                    <div><span class="key">其他键:</span> <span class="count">${otherKeys}</span></div>
+                </div>
+            `;
+        }
+
+        function displayRegionPostalCodes() {
+            const container = document.getElementById('regionPostalCodes');
+            let html = '<div class="json-viewer">';
+            
+            for (let i = 1; i <= 8; i++) {
+                const key = `region_${i}_postal_codes`;
+                const data = localStorage.getItem(key);
+                
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        html += `<div><span class="key">${key}:</span> <span class="count">[${parsed.length}个]</span> <span class="value">${JSON.stringify(parsed, null, 2)}</span></div><br>`;
+                    } catch (e) {
+                        html += `<div><span class="key">${key}:</span> <span class="error">解析错误: ${e.message}</span></div><br>`;
+                    }
+                } else {
+                    html += `<div><span class="key">${key}:</span> <span class="error">不存在</span></div><br>`;
+                }
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function displayFSAConfigs() {
+            const container = document.getElementById('fsaConfigs');
+            const data = localStorage.getItem('fsa_configurations');
+            
+            if (data) {
+                try {
+                    const parsed = JSON.parse(data);
+                    const keys = Object.keys(parsed);
+                    let totalPostalCodes = 0;
+                    
+                    keys.forEach(key => {
+                        if (parsed[key].postalCodes) {
+                            totalPostalCodes += parsed[key].postalCodes.length;
+                        }
+                    });
+                    
+                    container.innerHTML = `
+                        <div class="json-viewer">
+                            <div><span class="key">FSA配置数量:</span> <span class="count">${keys.length}</span></div>
+                            <div><span class="key">总邮编数量:</span> <span class="count">${totalPostalCodes}</span></div>
+                            <div><span class="key">FSA列表:</span> <span class="value">${keys.join(', ')}</span></div>
+                            <br>
+                            <div><span class="key">详细数据:</span></div>
+                            <div class="value">${JSON.stringify(parsed, null, 2)}</div>
+                        </div>
+                    `;
+                } catch (e) {
+                    container.innerHTML = `<div class="error">解析FSA配置失败: ${e.message}</div>`;
+                }
+            } else {
+                container.innerHTML = '<div class="error">没有FSA配置数据</div>';
+            }
+        }
+
+        function displayRegionConfigs() {
+            const container = document.getElementById('regionConfigs');
+            const data = localStorage.getItem('region_configurations');
+            
+            if (data) {
+                try {
+                    const parsed = JSON.parse(data);
+                    container.innerHTML = `
+                        <div class="json-viewer">
+                            <div><span class="key">区域配置:</span></div>
+                            <div class="value">${JSON.stringify(parsed, null, 2)}</div>
+                        </div>
+                    `;
+                } catch (e) {
+                    container.innerHTML = `<div class="error">解析区域配置失败: ${e.message}</div>`;
+                }
+            } else {
+                container.innerHTML = '<div class="error">没有区域配置数据</div>';
+            }
+        }
+
+        function displayAllData() {
+            const container = document.getElementById('allData');
+            let html = '<div class="json-viewer">';
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                
+                html += `<div><span class="key">${key}:</span><br><span class="value">${value}</span></div><br><hr><br>`;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function analyzePostalCodes() {
+            const container = document.getElementById('analysis');
+            let analysis = {
+                regionPostalCodes: {},
+                fsaPostalCodes: {},
+                totalBySource: {
+                    regionSystem: 0,
+                    fsaSystem: 0
+                }
+            };
+
+            // 分析区域邮编系统
+            for (let i = 1; i <= 8; i++) {
+                const key = `region_${i}_postal_codes`;
+                const data = localStorage.getItem(key);
+                
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        analysis.regionPostalCodes[i] = parsed.length;
+                        analysis.totalBySource.regionSystem += parsed.length;
+                    } catch (e) {
+                        analysis.regionPostalCodes[i] = `错误: ${e.message}`;
+                    }
+                } else {
+                    analysis.regionPostalCodes[i] = 0;
+                }
+            }
+
+            // 分析FSA系统
+            const fsaData = localStorage.getItem('fsa_configurations');
+            if (fsaData) {
+                try {
+                    const parsed = JSON.parse(fsaData);
+                    Object.keys(parsed).forEach(fsaCode => {
+                        const config = parsed[fsaCode];
+                        if (config.postalCodes) {
+                            analysis.fsaPostalCodes[fsaCode] = config.postalCodes.length;
+                            analysis.totalBySource.fsaSystem += config.postalCodes.length;
+                        }
+                    });
+                } catch (e) {
+                    analysis.fsaPostalCodes = `错误: ${e.message}`;
+                }
+            }
+
+            container.innerHTML = `
+                <div class="json-viewer">
+                    <div><span class="key">数据分析结果:</span></div>
+                    <div class="value">${JSON.stringify(analysis, null, 2)}</div>
+                </div>
+            `;
+        }
+
+        function clearAllData() {
+            if (confirm('确定要清空所有LocalStorage数据吗？')) {
+                localStorage.clear();
+                refreshData();
+                alert('所有数据已清空');
+            }
+        }
+
+        function exportData() {
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                data[key] = localStorage.getItem(key);
+            }
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'localStorage_backup.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 页面加载时自动刷新数据
+        window.onload = function() {
+            refreshData();
+        };
+    </script>
+</body>
+</html>

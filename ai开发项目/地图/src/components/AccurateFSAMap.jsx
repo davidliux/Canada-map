@@ -7,13 +7,48 @@ import L from 'leaflet';
 
 // 可配送的FSA列表
 import { deliverableFSAs } from '../data/deliverableFSA.js';
+import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerator.js';
+import { getRegionPostalCodes } from '../utils/unifiedStorage';
+import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
+import ProvinceAnalyzer from './ProvinceAnalyzer';
+import FixedQuotationPanel from './FixedQuotationPanel';
+import DeliveryAreaStatus from './DeliveryAreaStatus';
+import {
+  filterMapDataByDeliveryArea,
+  getAllDeliveryFSAs,
+  getDeliveryAreaStats
+} from '../utils/deliveryAreaFilter.js';
 
-const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs }) => {
+const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs, selectedRegions = [], onFSAClick, onProvinceChange }) => {
   const [filteredFSAs, setFilteredFSAs] = useState([]);
   const [mapData, setMapData] = useState(null);
   const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
   const [currentDeliverableFSAs, setCurrentDeliverableFSAs] = useState([]);
+  const [currentMapProvince, setCurrentMapProvince] = useState(selectedProvince);
+  const [selectedFSAForQuotation, setSelectedFSAForQuotation] = useState(null);
+
+  // 设置全局函数供弹窗使用
+  useEffect(() => {
+    window.openFSAManagement = (fsaCode, province, region) => {
+      if (onFSAClick) {
+        onFSAClick({
+          fsaCode,
+          province,
+          region
+        });
+      }
+    };
+
+    window.printQuotation = (fsaCode) => {
+      printQuotation(fsaCode);
+    };
+
+    return () => {
+      delete window.openFSAManagement;
+      delete window.printQuotation;
+    };
+  }, [onFSAClick]);
 
   // 监听外部传入的FSA数据变化
   useEffect(() => {
@@ -26,6 +61,30 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
       });
     }
   }, [deliverableFSAs]);
+
+  // 监听数据更新通知
+  useEffect(() => {
+    const unsubscribe = dataUpdateNotifier.subscribe((updateInfo) => {
+      console.log('🗺️ AccurateFSAMap收到数据更新通知:', updateInfo);
+
+      // 如果是邮编更新或价格配置更新，重新加载地图数据
+      if (updateInfo.type === 'regionUpdate' &&
+          (updateInfo.updateType === 'postalCodes' || updateInfo.updateType === 'pricing')) {
+        console.log('🔄 区域配置更新，重新加载地图数据');
+
+        // 重新加载地图数据以应用新的配送区域筛选
+        loadFSAData();
+      }
+
+      // 如果是全局刷新，重新加载所有数据
+      if (updateInfo.type === 'globalRefresh') {
+        console.log('🔄 全局数据刷新，重新加载地图数据');
+        loadFSAData();
+      }
+    });
+
+    return unsubscribe;
+  }, [selectedRegions]);
 
   useEffect(() => {
     // 动态加载新的完整FSA数据文件
@@ -42,18 +101,16 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         console.log('✅ FSA数据加载成功:', fsaBoundariesData);
         
         if (fsaBoundariesData && fsaBoundariesData.features) {
-          // 只显示可配送的FSA区域
-          const processed = {
-            ...fsaBoundariesData,
-            features: fsaBoundariesData.features.filter(feature => {
-              const fsaCode = feature.properties.CFSAUID;
-              return currentDeliverableFSAs.includes(fsaCode);
-            })
-          };
-          
-          console.log('🎯 处理完成:', processed.features.length, '个可配送FSA区域');
-          console.log('📊 覆盖率统计:', fsaBoundariesData.metadata);
-          
+          // 使用配送区域筛选器过滤FSA数据
+          const processed = filterMapDataByDeliveryArea(fsaBoundariesData, selectedRegions);
+
+          console.log('🎯 配送区域筛选完成:', processed.features.length, '个FSA区域');
+          console.log('📊 筛选统计:', processed.metadata);
+
+          // 获取配送区域统计信息
+          const deliveryStats = getDeliveryAreaStats();
+          console.log('📈 配送区域统计:', deliveryStats);
+
           setMapData(processed);
         } else {
           throw new Error('数据格式错误或为空');
@@ -90,6 +147,17 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     }
   };
 
+  // 处理省份切换
+  const handleProvinceSwitch = (province) => {
+    console.log('🗺️ 切换到省份:', province);
+    setCurrentMapProvince(province);
+
+    // 通知父组件更新省份筛选
+    if (onProvinceChange) {
+      onProvinceChange(province);
+    }
+  };
+
   // 获取省份的地理中心点和缩放级别
   const getProvinceBounds = (province) => {
     const bounds = {
@@ -116,7 +184,10 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
       if (!map || !filteredData || filteredData.features.length === 0) return;
 
       const timeout = setTimeout(() => {
-        if (selectedProvince === 'all') {
+        // 使用当前地图省份而不是选中省份
+        const targetProvince = currentMapProvince || selectedProvince;
+
+        if (targetProvince === 'all') {
           // 显示所有区域 - 缩放到加拿大全境
           const bounds = getProvinceBounds('all');
           map.setView(bounds.center, bounds.zoom);
@@ -138,41 +209,83 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
               });
             } else {
               // 如果没有找到具体区域，使用省份预设的中心点
-              const bounds = getProvinceBounds(selectedProvince);
+              const bounds = getProvinceBounds(targetProvince);
               map.setView(bounds.center, bounds.zoom);
             }
           } catch (error) {
             console.warn('自动缩放失败，使用预设区域:', error);
-            const bounds = getProvinceBounds(selectedProvince);
+            const bounds = getProvinceBounds(targetProvince);
             map.setView(bounds.center, bounds.zoom);
           }
         }
       }, 300); // 添加延迟确保数据渲染完成
 
       return () => clearTimeout(timeout);
-    }, [map, selectedProvince, filteredData]);
+    }, [map, currentMapProvince, selectedProvince, filteredData]);
 
     return null;
   };
 
+  // 获取区域筛选的FSA列表
+  const getRegionFilteredFSAs = () => {
+    if (selectedRegions.length === 0) return [];
+
+    const regionFSAs = [];
+    selectedRegions.forEach(regionId => {
+      try {
+        // 使用统一存储架构获取区域邮编
+        const postalCodes = getRegionPostalCodes(regionId);
+        if (postalCodes && postalCodes.length > 0) {
+          regionFSAs.push(...postalCodes);
+          console.log(`📍 区域${regionId}邮编数据:`, postalCodes.length, '个');
+        } else {
+          console.log(`⚠️ 区域${regionId}没有邮编数据`);
+        }
+      } catch (error) {
+        console.error(`❌ 读取区域 ${regionId} 邮编数据失败:`, error);
+      }
+    });
+
+    console.log('🎯 区域筛选FSA列表:', regionFSAs.length, '个', regionFSAs);
+    return regionFSAs;
+  };
+
   useEffect(() => {
     if (mapData) {
+      console.log('🔍 开始计算地图筛选结果...');
       let filtered = mapData.features.map(feature => feature.properties.CFSAUID);
-      
+      console.log('📊 地图总FSA数量:', filtered.length);
+
+      // 应用区域筛选（优先级最高）
+      if (selectedRegions.length > 0) {
+        console.log('🎯 应用区域筛选，选中区域:', selectedRegions);
+        const regionFSAs = getRegionFilteredFSAs();
+        const beforeCount = filtered.length;
+        filtered = filtered.filter(fsa => regionFSAs.includes(fsa));
+        console.log(`📍 区域筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
+      }
+
       // 应用省份筛选
       if (selectedProvince !== 'all') {
+        console.log('🌍 应用省份筛选:', selectedProvince);
+        const beforeCount = filtered.length;
         filtered = filtered.filter(fsa => getProvinceFromFSA(fsa) === selectedProvince);
+        console.log(`🌍 省份筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
       }
-      
+
       // 应用搜索查询
       if (searchQuery && searchQuery.trim()) {
+        console.log('🔍 应用搜索查询:', searchQuery);
         const query = searchQuery.toLowerCase().trim();
+        const beforeCount = filtered.length;
         filtered = filtered.filter(fsa => fsa.toLowerCase().includes(query));
+        console.log(`🔍 搜索筛选结果: ${beforeCount} -> ${filtered.length} 个FSA`);
       }
-      
+
+      console.log('✅ 最终筛选结果:', filtered.length, '个FSA');
       setFilteredFSAs(filtered);
     }
-  }, [searchQuery, mapData, selectedProvince]);
+  }, [searchQuery, mapData, selectedProvince, selectedRegions]);
 
   // 根据省份获取颜色
   const getProvinceColor = (fsa) => {
@@ -214,20 +327,15 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     const fsaCode = feature.properties.CFSAUID;
     const province = feature.properties.province;
     const region = feature.properties.region;
-    
-    layer.bindPopup(`
-      <div style="font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; min-width: 220px; background: linear-gradient(135deg, #1f2937 0%, #374151 100%); border-radius: 12px; padding: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);">
-        <h3 style="color: #ffffff; margin: 0 0 12px 0; font-size: 20px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${fsaCode}</h3>
-        <div style="space-y: 10px;">
-          <p style="margin: 6px 0; color: #e5e7eb; font-size: 14px;"><strong style="color: #93c5fd;">省份:</strong> ${province}</p>
-          <p style="margin: 6px 0; color: #e5e7eb; font-size: 14px;"><strong style="color: #93c5fd;">地区:</strong> ${region}</p>
-          <p style="margin: 6px 0; color: #e5e7eb; font-size: 14px;"><strong style="color: #93c5fd;">土地面积:</strong> ${feature.properties.LANDAREA?.toFixed(2) || 'N/A'} km²</p>
-          <div style="margin-top: 16px; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-            <p style="margin: 0; color: #ffffff; font-weight: 600; font-size: 14px; text-align: center;">✓ 可配送区域</p>
-          </div>
-        </div>
-      </div>
-    `);
+
+    // 点击时显示固定报价单面板，而不是弹窗
+    layer.on('click', () => {
+      setSelectedFSAForQuotation({
+        fsaCode,
+        province,
+        region
+      });
+    });
 
     layer.bindTooltip(`
       <div style="text-align: center; background: linear-gradient(135deg, #1f2937 0%, #374151 100%); border-radius: 8px; padding: 8px 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);">
@@ -250,6 +358,18 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
 
     layer.on('mouseout', function(e) {
       layer.setStyle(styleFeature(feature));
+    });
+
+    // 添加点击事件
+    layer.on('click', function(e) {
+      if (onFSAClick) {
+        onFSAClick({
+          fsaCode,
+          province,
+          region,
+          properties: feature.properties
+        });
+      }
     });
   };
 
@@ -303,20 +423,31 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
           
           <div className="flex items-center space-x-4">
             <div className="text-right">
-              <p className="text-sm text-gray-400">可配送区域</p>
+              <p className="text-sm text-gray-400">配送区域FSA</p>
               <p className="text-lg font-bold text-cyber-blue">
                 {mapData?.features?.length || 0}
               </p>
+              {mapData?.metadata?.originalCount && (
+                <p className="text-xs text-gray-500">
+                  总计: {mapData.metadata.originalCount}
+                </p>
+              )}
             </div>
 
             {filteredFSAs.length !== (mapData?.features?.length || 0) && (
               <div className="text-right">
                 <p className="text-sm text-gray-400">
-                  {selectedProvince !== 'all' || searchQuery ? '筛选结果' : '搜索结果'}
+                  {selectedRegions.length > 0 ? '区域筛选' :
+                   selectedProvince !== 'all' || searchQuery ? '筛选结果' : '搜索结果'}
                 </p>
                 <p className="text-lg font-bold text-cyber-green">
                   {filteredFSAs.length}
                 </p>
+                {selectedRegions.length > 0 && (
+                  <p className="text-xs text-gray-500">
+                    区域: {selectedRegions.join(', ')}
+                  </p>
+                )}
               </div>
             )}
             
@@ -332,6 +463,23 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
 
       {/* 地图容器 */}
       <div className="h-[600px] relative">
+        {/* 省份分析器 - 移动到地图底部避免与弹窗重叠 */}
+        {selectedRegions && selectedRegions.length > 0 && (
+          <div className="absolute bottom-4 left-4 z-[1000] max-w-sm">
+            <ProvinceAnalyzer
+              selectedRegions={selectedRegions}
+              onProvinceSwitch={handleProvinceSwitch}
+              currentProvince={currentMapProvince}
+            />
+          </div>
+        )}
+
+        {/* 配送区域状态 */}
+        <DeliveryAreaStatus
+          className="absolute bottom-4 right-4 z-[1000] max-w-xs"
+          selectedRegions={selectedRegions}
+        />
+
         <MapContainer
           ref={mapRef}
           center={[56.1304, -106.3468]} // 加拿大地理中心
@@ -340,6 +488,7 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
           maxZoom={18}
           style={{ height: '100%', width: '100%' }}
           className="rounded-b-2xl"
+          onClick={() => setSelectedFSAForQuotation(null)} // 点击空白区域关闭报价单
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -463,6 +612,12 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
           }
         `}</style>
       </div>
+
+      {/* 固定位置的报价单面板 */}
+      <FixedQuotationPanel
+        selectedFSA={selectedFSAForQuotation}
+        onClose={() => setSelectedFSAForQuotation(null)}
+      />
     </motion.div>
   );
 };

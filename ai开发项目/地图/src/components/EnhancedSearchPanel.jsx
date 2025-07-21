@@ -14,16 +14,56 @@ import {
   FileText
 } from 'lucide-react';
 import { getFSAsByProvince } from '../data/deliverableFSA';
+import { getRegionPostalCodes, getAllRegionConfigs } from '../utils/unifiedStorage';
+import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 
-const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince }) => {
+const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince, onRegionFilter }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]);
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
+  const [selectedRegions, setSelectedRegions] = useState(new Set());
+  const [regionPostalCounts, setRegionPostalCounts] = useState({});
   const filterRef = useRef(null);
 
   const fsasByProvince = getFSAsByProvince();
   const provinces = Object.keys(fsasByProvince).filter(p => fsasByProvince[p].length > 0);
+
+  // 初始化和监听数据更新
+  useEffect(() => {
+    // 初始加载区域邮编数量
+    updateRegionPostalCounts();
+
+    // 监听数据更新通知
+    const unsubscribe = dataUpdateNotifier.subscribe((updateInfo) => {
+      console.log('🔄 EnhancedSearchPanel收到数据更新通知:', updateInfo);
+
+      // 如果是区域邮编更新，刷新计数
+      if (updateInfo.type === 'regionUpdate' && updateInfo.updateType === 'postalCodes') {
+        updateRegionPostalCounts();
+
+        // 如果当前选中的区域有更新，重新触发筛选
+        if (selectedRegions.has(updateInfo.regionId)) {
+          console.log('🎯 当前选中区域有更新，重新触发筛选');
+          if (onRegionFilter) {
+            onRegionFilter(Array.from(selectedRegions));
+          }
+        }
+      }
+
+      // 如果是全局刷新，更新所有数据
+      if (updateInfo.type === 'globalRefresh') {
+        updateRegionPostalCounts();
+
+        // 重新触发当前筛选
+        if (selectedRegions.size > 0 && onRegionFilter) {
+          onRegionFilter(Array.from(selectedRegions));
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [selectedRegions]);
 
   const provinceNames = {
     'BC': '不列颠哥伦比亚省',
@@ -81,6 +121,67 @@ const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince }) =
     onProvinceChange('all');
     setSearchQuery('');
     onSearch('');
+    clearRegionFilter();
+  };
+
+  /**
+   * 处理区域筛选
+   */
+  const handleRegionToggle = (regionId) => {
+    const newSelectedRegions = new Set(selectedRegions);
+    if (newSelectedRegions.has(regionId)) {
+      newSelectedRegions.delete(regionId);
+    } else {
+      newSelectedRegions.add(regionId);
+    }
+    setSelectedRegions(newSelectedRegions);
+
+    // 通知父组件
+    if (onRegionFilter) {
+      onRegionFilter(Array.from(newSelectedRegions));
+    }
+  };
+
+  /**
+   * 清除区域筛选
+   */
+  const clearRegionFilter = () => {
+    setSelectedRegions(new Set());
+    if (onRegionFilter) {
+      onRegionFilter([]);
+    }
+  };
+
+  /**
+   * 全选区域
+   */
+  const selectAllRegions = () => {
+    const allRegions = new Set(['1', '2', '3', '4', '5', '6', '7', '8']);
+    setSelectedRegions(allRegions);
+    if (onRegionFilter) {
+      onRegionFilter(Array.from(allRegions));
+    }
+  };
+
+  /**
+   * 更新区域邮编数量缓存
+   */
+  const updateRegionPostalCounts = () => {
+    const counts = {};
+    for (let i = 1; i <= 8; i++) {
+      const regionId = i.toString();
+      const postalCodes = getRegionPostalCodes(regionId);
+      counts[regionId] = postalCodes.length;
+    }
+    setRegionPostalCounts(counts);
+    console.log('📊 更新区域邮编数量:', counts);
+  };
+
+  /**
+   * 获取区域邮编数量
+   */
+  const getRegionPostalCount = (regionId) => {
+    return regionPostalCounts[regionId] || 0;
   };
 
   const handleExportData = () => {
@@ -313,6 +414,72 @@ const EnhancedSearchPanel = ({ onSearch, onProvinceChange, selectedProvince }) =
             </button>
           ))}
         </div>
+      </div>
+
+      {/* 配送区域筛选 */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-white font-medium flex items-center">
+            <MapPin className="w-4 h-4 mr-2 text-green-400" />
+            配送区域筛选
+          </h3>
+          <div className="flex gap-2">
+            <button
+              onClick={selectAllRegions}
+              className="text-xs text-green-400 hover:text-green-300 transition-colors"
+            >
+              全选
+            </button>
+            <button
+              onClick={clearRegionFilter}
+              className="text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              清除
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-green-400 mb-3 flex items-center">
+          🎯 按配送区域筛选邮编，支持多选
+        </p>
+        <div className="grid grid-cols-4 gap-2">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((regionId) => {
+            const count = getRegionPostalCount(regionId.toString());
+            const isSelected = selectedRegions.has(regionId.toString());
+            return (
+              <button
+                key={regionId}
+                onClick={() => handleRegionToggle(regionId.toString())}
+                className={`px-3 py-2 rounded-lg text-sm transition-all border ${
+                  isSelected
+                    ? 'bg-green-500/20 text-green-400 border-green-500/50'
+                    : count > 0
+                    ? 'bg-cyber-dark text-gray-300 hover:bg-cyber-light-gray border-cyber-light-gray'
+                    : 'bg-gray-600/20 text-gray-500 border-gray-600/30 cursor-not-allowed'
+                }`}
+                disabled={count === 0}
+                title={count === 0 ? '该区域暂无邮编数据' : `${count}个邮编`}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="font-medium">{regionId}区</span>
+                  <span className={`text-xs ${count > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                    {count}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {selectedRegions.size > 0 && (
+          <div className="mt-3 p-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+            <p className="text-xs text-green-400">
+              已选择 {selectedRegions.size} 个区域，共 {
+                Array.from(selectedRegions).reduce((total, regionId) =>
+                  total + getRegionPostalCount(regionId), 0
+                )
+              } 个邮编
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 数据管理面板 */}

@@ -1,26 +1,136 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Truck, Zap, Globe, Settings, Bell, User, Database } from 'lucide-react';
+import { Truck, Zap, Globe, Settings, Bell, User, Database, Download } from 'lucide-react';
 import EnhancedSearchPanel from './components/EnhancedSearchPanel';
 import EnhancedStatsPanel from './components/EnhancedStatsPanel';
 import AccurateFSAMap from './components/AccurateFSAMap';
-import EnhancedFSAManager from './components/FSAManager';
+import { getRegionPostalCodes } from './utils/unifiedStorage.js';
+import { dataUpdateNotifier } from './utils/dataUpdateNotifier';
+import { recoverLegacyData, checkDataIntegrity } from './utils/dataRecovery';
+import './utils/quickSetup.js'; // 加载快速启动脚本
+import './utils/demoSetup.js'; // 加载演示设置脚本
+
+import RegionManagementPanel from './components/RegionManagementPanel';
+import ImportExportManager from './components/ImportExportManager';
+import DataRecoveryNotification from './components/DataRecoveryNotification';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProvince, setSelectedProvince] = useState('all');
+  const [selectedRegions, setSelectedRegions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showFSAManager, setShowFSAManager] = useState(false);
+
   const [deliverableFSAs, setDeliverableFSAs] = useState([]);
+  const [selectedFSA, setSelectedFSA] = useState(null);
+  const [showRegionManagement, setShowRegionManagement] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [dataRefreshTrigger, setDataRefreshTrigger] = useState(0);
 
   useEffect(() => {
+    // 系统启动时进行数据恢复检查
+    const initializeSystem = async () => {
+      console.log('🚀 系统启动中...');
+
+      // 检查数据完整性
+      const integrityReport = checkDataIntegrity();
+      console.log('📊 数据完整性报告:', integrityReport);
+
+      // 如果数据不完整，尝试恢复
+      if (integrityReport.totalFSAs === 0 || integrityReport.regionsWithData === 0) {
+        console.log('⚠️ 检测到数据问题，开始恢复...');
+        const recoveryResult = recoverLegacyData();
+        console.log('🔄 数据恢复结果:', recoveryResult);
+
+        if (recoveryResult.success) {
+          // 恢复成功后触发数据刷新
+          setDataRefreshTrigger(prev => prev + 1);
+        }
+      }
+    };
+
     // 模拟系统启动
     const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, []);
+      initializeSystem().finally(() => {
+        setIsLoading(false);
+      });
+    }, 1500);
+
+    // 监听数据更新通知
+    const unsubscribe = dataUpdateNotifier.subscribe((updateInfo) => {
+      console.log('App收到数据更新通知:', updateInfo);
+
+      // 触发数据刷新
+      setDataRefreshTrigger(prev => prev + 1);
+
+      // 如果是邮编更新，重新计算可配送FSA列表
+      if (updateInfo.type === 'regionUpdate' && updateInfo.updateType === 'postalCodes') {
+        handleRegionFilter(selectedRegions);
+      }
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [selectedRegions]);
+
+  /**
+   * 处理FSA分区点击事件
+   */
+  const handleFSAClick = (fsaData) => {
+    setSelectedFSA(fsaData);
+    setShowRegionManagement(true);
+  };
+
+  /**
+   * 关闭区域管理面板
+   */
+  const handleCloseRegionManagement = () => {
+    setShowRegionManagement(false);
+    setSelectedFSA(null);
+  };
+
+  /**
+   * 区域配置变更处理
+   */
+  const handleRegionConfigChange = (config) => {
+    console.log('区域配置已更新:', config);
+
+    // 触发数据刷新，通知其他组件更新
+    setDataRefreshTrigger(prev => prev + 1);
+
+    // 如果是邮编变更，更新可配送FSA列表
+    if (config && config.postalCodes) {
+      // 重新获取所有选中区域的邮编
+      handleRegionFilter(selectedRegions);
+    }
+  };
+
+  /**
+   * 处理区域筛选
+   */
+  const handleRegionFilter = (regions) => {
+    console.log('区域筛选更新:', regions);
+    setSelectedRegions(regions);
+
+    // 根据选中的区域更新可配送FSA列表
+    if (regions.length > 0) {
+      const regionFSAs = [];
+      regions.forEach(regionId => {
+        try {
+          // 使用统一存储架构获取区域邮编
+          const postalCodes = getRegionPostalCodes(regionId);
+          regionFSAs.push(...postalCodes);
+        } catch (error) {
+          console.error(`读取区域 ${regionId} 邮编数据失败:`, error);
+        }
+      });
+      setDeliverableFSAs(regionFSAs);
+    } else {
+      // 如果没有选择区域，清空筛选
+      setDeliverableFSAs([]);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -112,23 +222,26 @@ function App() {
               
               {/* 操作按钮 */}
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    console.log('邮编管理按钮被点击，当前状态:', showFSAManager);
-                    setShowFSAManager(!showFSAManager);
-                  }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                    showFSAManager 
-                      ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/30' 
-                      : 'text-gray-400 hover:text-cyber-green hover:bg-cyber-green/10'
-                  }`}
-                  title="邮编管理"
+                <button
+                  onClick={() => setShowRegionManagement(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-cyber-purple hover:bg-cyber-purple/10"
+                  title="配送区域管理"
                 >
                   <Database className="w-5 h-5" />
-                  <span className="hidden sm:inline text-sm">邮编管理</span>
-                  {showFSAManager && <span className="text-xs ml-1">●</span>}
+                  <span className="hidden sm:inline text-sm">配送区域管理</span>
                 </button>
-                
+
+                <button
+                  onClick={() => setShowImportExport(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-cyber-purple hover:bg-cyber-purple/10"
+                  title="导入导出"
+                >
+                  <Download className="w-5 h-5" />
+                  <span className="hidden sm:inline text-sm">导入导出</span>
+                </button>
+
+                {/* 数据修复按钮已删除 - 使用统一存储架构，不再需要数据迁移 */}
+
                 <button className="p-2 text-gray-400 hover:text-cyber-blue transition-colors relative">
                   <Bell className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 w-3 h-3 bg-cyber-blue rounded-full text-xs"></span>
@@ -151,27 +264,7 @@ function App() {
         {/* 增强版统计面板 */}
         <EnhancedStatsPanel />
         
-        {/* FSA邮编管理面板 */}
-        {console.log('渲染时 showFSAManager 状态:', showFSAManager)}
-        {showFSAManager && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-8"
-          >
-            <EnhancedFSAManager 
-              onDataChange={setDeliverableFSAs}
-            />
-          </motion.div>
-        )}
-        
-        {/* 调试信息 */}
-        {showFSAManager && (
-          <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-yellow-300 text-sm">
-            🔧 调试: FSAManager 应该在这里显示 (showFSAManager = {String(showFSAManager)})
-          </div>
-        )}
+
         
         {/* 主要内容区域 */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
@@ -181,6 +274,7 @@ function App() {
               onSearch={setSearchQuery}
               onProvinceChange={setSelectedProvince}
               selectedProvince={selectedProvince}
+              onRegionFilter={handleRegionFilter}
             />
           </div>
 
@@ -192,15 +286,45 @@ function App() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="h-[700px]"
             >
-              <AccurateFSAMap 
-                searchQuery={searchQuery} 
+              <AccurateFSAMap
+                searchQuery={searchQuery}
                 selectedProvince={selectedProvince}
                 deliverableFSAs={deliverableFSAs}
+                selectedRegions={selectedRegions}
+                onFSAClick={handleFSAClick}
+                onProvinceChange={setSelectedProvince}
               />
             </motion.div>
           </div>
         </div>
+
+        {/* 区域管理面板 */}
+        {showRegionManagement && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="mt-8"
+          >
+            <RegionManagementPanel
+              onClose={handleCloseRegionManagement}
+              onConfigChange={handleRegionConfigChange}
+            />
+          </motion.div>
+        )}
       </div>
+
+      {/* 导入导出管理器 */}
+      {showImportExport && (
+        <ImportExportManager
+          onClose={() => setShowImportExport(false)}
+          onDataChange={() => {
+            // 数据变更后的处理逻辑
+            console.log('导入导出数据已变更');
+            setDataRefreshTrigger(prev => prev + 1);
+          }}
+        />
+      )}
 
       {/* 增强版底部状态栏 */}
       <motion.footer 
@@ -253,13 +377,16 @@ function App() {
         </div>
       </motion.footer>
 
+      {/* 数据恢复通知 */}
+      <DataRecoveryNotification />
+
       {/* 科技风格背景效果 */}
       <div className="fixed inset-0 pointer-events-none z-0">
         {/* 动态背景圆圈 */}
         <div className="absolute top-20 left-20 w-96 h-96 bg-cyber-blue/3 rounded-full blur-3xl animate-pulse-slow"></div>
         <div className="absolute bottom-20 right-20 w-[500px] h-[500px] bg-cyber-purple/3 rounded-full blur-3xl animate-pulse-slow" style={{animationDelay: '1s'}}></div>
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-cyber-green/3 rounded-full blur-2xl animate-pulse-slow" style={{animationDelay: '2s'}}></div>
-        
+
         {/* 网格背景 */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
       </div>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据清理和迁移工具（一次性使用）</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .danger {
+            background: #660000;
+            color: #ff6666;
+            border-color: #aa0000;
+        }
+        .danger:hover {
+            background: #880000;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        .info {
+            color: #00ccff;
+        }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .step {
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #00ccff;
+            background: #2a2a2a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 数据清理和迁移工具</h1>
+        <div class="warning">
+            <strong>⚠️ 重要提示：</strong>这是一次性使用的迁移工具。完成迁移后，请删除此文件。
+        </div>
+        
+        <div class="section">
+            <h2>迁移步骤</h2>
+            <div class="step">
+                <strong>步骤1：</strong>备份现有数据
+                <button onclick="backupOldData()">备份旧数据</button>
+            </div>
+            <div class="step">
+                <strong>步骤2：</strong>分析现有数据结构
+                <button onclick="analyzeCurrentData()">分析数据</button>
+            </div>
+            <div class="step">
+                <strong>步骤3：</strong>迁移到统一格式
+                <button onclick="migrateToUnifiedFormat()">执行迁移</button>
+            </div>
+            <div class="step">
+                <strong>步骤4：</strong>验证迁移结果
+                <button onclick="verifyMigration()">验证结果</button>
+            </div>
+            <div class="step">
+                <strong>步骤5：</strong>清理旧数据
+                <button onclick="cleanupOldData()" class="danger">清理旧数据</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>操作日志</h2>
+            <div id="log"></div>
+        </div>
+
+        <div class="section">
+            <h2>数据状态</h2>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function backupOldData() {
+            try {
+                log('开始备份旧数据...', 'info');
+                
+                const backup = {
+                    timestamp: new Date().toISOString(),
+                    fsa_configurations: localStorage.getItem('fsa_configurations'),
+                    region_configurations: localStorage.getItem('region_configurations'),
+                    region_postal_codes: {}
+                };
+
+                // 备份所有region_X_postal_codes
+                for (let i = 1; i <= 8; i++) {
+                    const key = `region_${i}_postal_codes`;
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        backup.region_postal_codes[key] = data;
+                    }
+                }
+
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `data_backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                log('数据备份完成，已下载备份文件', 'success');
+            } catch (error) {
+                log(`备份失败: ${error.message}`, 'error');
+            }
+        }
+
+        function analyzeCurrentData() {
+            try {
+                log('开始分析现有数据结构...', 'info');
+                
+                const analysis = {
+                    oldFSAData: null,
+                    oldRegionData: null,
+                    newRegionData: {},
+                    unifiedData: null
+                };
+
+                // 分析旧FSA数据
+                const fsaData = localStorage.getItem('fsa_configurations');
+                if (fsaData) {
+                    const fsaConfigs = JSON.parse(fsaData);
+                    let totalPostalCodes = 0;
+                    Object.values(fsaConfigs).forEach(config => {
+                        if (config.postalCodes) {
+                            totalPostalCodes += config.postalCodes.length;
+                        }
+                    });
+                    analysis.oldFSAData = {
+                        fsaCount: Object.keys(fsaConfigs).length,
+                        totalPostalCodes
+                    };
+                    log(`发现旧FSA数据: ${analysis.oldFSAData.fsaCount} 个FSA，${analysis.oldFSAData.totalPostalCodes} 个邮编`, 'info');
+                }
+
+                // 分析旧区域数据
+                const regionData = localStorage.getItem('region_configurations');
+                if (regionData) {
+                    const regionConfigs = JSON.parse(regionData);
+                    analysis.oldRegionData = {
+                        regionCount: Object.keys(regionConfigs).length
+                    };
+                    log(`发现旧区域配置: ${analysis.oldRegionData.regionCount} 个区域`, 'info');
+                }
+
+                // 分析新格式数据
+                for (let i = 1; i <= 8; i++) {
+                    const key = `region_${i}_postal_codes`;
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        const codes = JSON.parse(data);
+                        analysis.newRegionData[i] = codes.length;
+                    } else {
+                        analysis.newRegionData[i] = 0;
+                    }
+                }
+
+                // 分析统一格式数据
+                const unifiedData = localStorage.getItem('unified_region_data');
+                if (unifiedData) {
+                    const unified = JSON.parse(unifiedData);
+                    let totalCodes = 0;
+                    Object.values(unified).forEach(region => {
+                        if (region.postalCodes) {
+                            totalCodes += region.postalCodes.length;
+                        }
+                    });
+                    analysis.unifiedData = {
+                        regionCount: Object.keys(unified).length,
+                        totalPostalCodes: totalCodes
+                    };
+                    log(`发现统一格式数据: ${analysis.unifiedData.regionCount} 个区域，${analysis.unifiedData.totalPostalCodes} 个邮编`, 'info');
+                }
+
+                document.getElementById('status').innerHTML = `<pre>${JSON.stringify(analysis, null, 2)}</pre>`;
+                log('数据分析完成', 'success');
+
+            } catch (error) {
+                log(`分析失败: ${error.message}`, 'error');
+            }
+        }
+
+        function migrateToUnifiedFormat() {
+            try {
+                log('开始迁移到统一格式...', 'info');
+
+                // 创建统一格式的区域配置
+                const unifiedRegions = {};
+                
+                // 初始化8个区域
+                for (let i = 1; i <= 8; i++) {
+                    unifiedRegions[i.toString()] = {
+                        id: i.toString(),
+                        name: `区域${i}`,
+                        isActive: false,
+                        postalCodes: [],
+                        weightRanges: createDefaultWeightRanges(),
+                        lastUpdated: new Date().toISOString(),
+                        metadata: {
+                            createdAt: new Date().toISOString(),
+                            version: '2.0.0',
+                            notes: '从旧格式迁移',
+                            totalPostalCodes: 0
+                        }
+                    };
+                }
+
+                // 从旧数据迁移邮编
+                const fsaData = localStorage.getItem('fsa_configurations');
+                const regionData = localStorage.getItem('region_configurations');
+
+                if (fsaData && regionData) {
+                    const fsaConfigs = JSON.parse(fsaData);
+                    const regionConfigs = JSON.parse(regionData);
+
+                    Object.keys(regionConfigs).forEach(regionId => {
+                        const regionConfig = regionConfigs[regionId];
+                        if (regionConfig && regionConfig.fsaCodes && unifiedRegions[regionId]) {
+                            const migratedCodes = [];
+                            
+                            regionConfig.fsaCodes.forEach(fsaCode => {
+                                const fsaConfig = fsaConfigs[fsaCode];
+                                if (fsaConfig) {
+                                    migratedCodes.push(fsaCode);
+                                    if (fsaConfig.postalCodes && Array.isArray(fsaConfig.postalCodes)) {
+                                        migratedCodes.push(...fsaConfig.postalCodes);
+                                    }
+                                }
+                            });
+
+                            if (migratedCodes.length > 0) {
+                                const uniqueCodes = [...new Set(migratedCodes)];
+                                unifiedRegions[regionId].postalCodes = uniqueCodes;
+                                unifiedRegions[regionId].isActive = regionConfig.isActive || false;
+                                unifiedRegions[regionId].metadata.totalPostalCodes = uniqueCodes.length;
+                                log(`区域 ${regionId} 迁移了 ${uniqueCodes.length} 个邮编`, 'success');
+                            }
+                        }
+                    });
+                }
+
+                // 保存统一格式数据
+                localStorage.setItem('unified_region_data', JSON.stringify(unifiedRegions));
+                log('统一格式数据保存完成', 'success');
+
+                // 更新状态显示
+                analyzeCurrentData();
+
+            } catch (error) {
+                log(`迁移失败: ${error.message}`, 'error');
+            }
+        }
+
+        function verifyMigration() {
+            try {
+                log('开始验证迁移结果...', 'info');
+
+                const unifiedData = localStorage.getItem('unified_region_data');
+                if (!unifiedData) {
+                    log('未找到统一格式数据', 'error');
+                    return;
+                }
+
+                const unified = JSON.parse(unifiedData);
+                let totalPostalCodes = 0;
+                let activeRegions = 0;
+
+                Object.values(unified).forEach(region => {
+                    if (region.postalCodes) {
+                        totalPostalCodes += region.postalCodes.length;
+                    }
+                    if (region.isActive) {
+                        activeRegions++;
+                    }
+                });
+
+                log(`验证结果: ${Object.keys(unified).length} 个区域，${totalPostalCodes} 个邮编，${activeRegions} 个活跃区域`, 'success');
+
+                // 检查数据完整性
+                let hasErrors = false;
+                Object.entries(unified).forEach(([regionId, region]) => {
+                    if (!region.id || !region.name || !Array.isArray(region.postalCodes)) {
+                        log(`区域 ${regionId} 数据结构不完整`, 'error');
+                        hasErrors = true;
+                    }
+                });
+
+                if (!hasErrors) {
+                    log('数据验证通过，迁移成功！', 'success');
+                } else {
+                    log('数据验证发现问题，请检查', 'warning');
+                }
+
+            } catch (error) {
+                log(`验证失败: ${error.message}`, 'error');
+            }
+        }
+
+        function cleanupOldData() {
+            if (!confirm('确定要清理旧数据吗？此操作不可逆！请确保已完成备份和验证。')) {
+                return;
+            }
+
+            try {
+                log('开始清理旧数据...', 'warning');
+
+                // 删除旧格式数据
+                localStorage.removeItem('fsa_configurations');
+                localStorage.removeItem('region_configurations');
+                localStorage.removeItem('fsa_global_settings');
+                localStorage.removeItem('region_global_settings');
+                localStorage.removeItem('region_migration_status');
+
+                // 删除旧的region_X_postal_codes
+                for (let i = 1; i <= 8; i++) {
+                    localStorage.removeItem(`region_${i}_postal_codes`);
+                    localStorage.removeItem(`region_${i}_config`);
+                }
+
+                // 删除备份文件
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('fsa_backup_') || key.startsWith('unified_backup_')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+
+                log('旧数据清理完成', 'success');
+                log('迁移过程全部完成！现在应用使用统一的存储架构。', 'success');
+                
+                // 更新状态显示
+                analyzeCurrentData();
+
+            } catch (error) {
+                log(`清理失败: ${error.message}`, 'error');
+            }
+        }
+
+        function createDefaultWeightRanges() {
+            return [
+                { id: 'range_1', min: 0, max: 11.000, label: '0-11.000 KGS', price: 0, isActive: true },
+                { id: 'range_2', min: 11.001, max: 15.000, label: '11.001-15.000 KGS', price: 0, isActive: true },
+                { id: 'range_3', min: 15.001, max: 20.000, label: '15.001-20.000 KGS', price: 0, isActive: true },
+                { id: 'range_4', min: 20.001, max: 25.000, label: '20.001-25.000 KGS', price: 0, isActive: true },
+                { id: 'range_5', min: 25.001, max: 30.000, label: '25.001-30.000 KGS', price: 0, isActive: true },
+                { id: 'range_6', min: 30.001, max: 35.000, label: '30.001-35.000 KGS', price: 0, isActive: true },
+                { id: 'range_7', min: 35.001, max: 40.000, label: '35.001-40.000 KGS', price: 0, isActive: true },
+                { id: 'range_8', min: 40.001, max: 45.000, label: '40.001-45.000 KGS', price: 0, isActive: true },
+                { id: 'range_9', min: 45.001, max: 50.000, label: '45.001-50.000 KGS', price: 0, isActive: true },
+                { id: 'range_10', min: 50.001, max: 55.000, label: '50.001-55.000 KGS', price: 0, isActive: true },
+                { id: 'range_11', min: 55.001, max: 60.000, label: '55.001-60.000 KGS', price: 0, isActive: true },
+                { id: 'range_12', min: 60.001, max: 64.000, label: '60.001-64.000 KGS', price: 0, isActive: true },
+                { id: 'range_13', min: 64.001, max: Infinity, label: '64.000+ KGS', price: 0, isActive: true }
+            ];
+        }
+
+        // 页面加载时分析数据
+        window.onload = function() {
+            log('数据清理和迁移工具已加载', 'info');
+            analyzeCurrentData();
+        };
+    </script>
+</body>
+</html>
