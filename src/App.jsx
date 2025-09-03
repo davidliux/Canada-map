@@ -12,18 +12,30 @@ import { initializeSystemData } from './utils/initializeData'; // 导入初始�
 function App() {
   // 初始化存储兼容层和系统数据
   useEffect(() => {
-    compatLayer.init().then(() => {
-      console.log('存储兼容层初始化完成');
-      
-      // 初始化系统数据（如果需要）
-      const initialized = initializeSystemData();
-      if (initialized) {
-        console.log('✅ 系统数据已初始化');
-        setTimeout(() => window.location.reload(), 1000); // 1秒后重新加载
-      }
-    }).catch(error => {
-      console.error('存储兼容层初始化失败:', error);
-    });
+    // 添加初始化标记，防止重复初始化
+    const initKey = 'app_init_completed';
+    const isInitialized = sessionStorage.getItem(initKey);
+    
+    if (!isInitialized) {
+      compatLayer.init().then(() => {
+        console.log('存储兼容层初始化完成');
+        
+        // 初始化系统数据（如果需要）
+        const initialized = initializeSystemData();
+        if (initialized) {
+          console.log('✅ 系统数据已初始化');
+        }
+        
+        // 标记初始化完成
+        sessionStorage.setItem(initKey, 'true');
+      }).catch(error => {
+        console.error('存储兼容层初始化失败:', error);
+        // 即使失败也标记，避免无限重试
+        sessionStorage.setItem(initKey, 'error');
+      });
+    } else {
+      console.log('应用已初始化，跳过重复初始化');
+    }
   }, []);
 
   // 全局键盘快捷键

@@ -16,7 +16,10 @@ let isInitialized = false;
  * 应在应用启动时调用
  */
 export const initCompatLayer = async () => {
-  if (isInitialized) return;
+  if (isInitialized) {
+    console.log('兼容层已初始化，跳过');
+    return;
+  }
   
   try {
     // 从存储服务获取初始数据

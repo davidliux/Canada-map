@@ -88,7 +88,11 @@ export function initializeSystemData() {
 export function resetSystemData() {
   if (window.confirm('确定要重置所有数据吗？这将清除所有配置。')) {
     localStorage.clear();
+    sessionStorage.clear(); // 清除会话存储
     initializeSystemData();
-    window.location.reload();
+    // 延迟刷新，确保数据保存完成
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   }
 }

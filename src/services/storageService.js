@@ -30,6 +30,13 @@ class StorageService {
    * 初始化服务
    */
   async init() {
+    // 防止重复初始化
+    if (this.isInitialized) {
+      console.log('StorageService 已初始化，跳过');
+      return;
+    }
+    this.isInitialized = true;
+    
     // 先从本地存储恢复缓存作为备用
     this.restoreLocalCache();
     
