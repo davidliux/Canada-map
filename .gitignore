@@ -119,3 +119,9 @@ test_*.html
 *_DEBUG*.md
 *_ARCHITECTURE.md
 *_SUMMARY.md 
+# Environment files
+.env.local
+.env.*.local
+
+# Vercel
+.vercel

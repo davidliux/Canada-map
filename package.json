@@ -28,6 +28,7 @@
     "dist": "npm run build && electron-builder --publish=never"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
     "axios": "^1.6.0",
     "framer-motion": "^10.16.0",
     "leaflet": "^1.9.4",

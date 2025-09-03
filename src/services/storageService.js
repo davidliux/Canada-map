@@ -1,9 +1,14 @@
 /**
  * 混合存储服务
  * 提供本地缓存和后端同步的统一接口
+ * 支持三种模式：
+ * 1. Serverless (Vercel) - 使用 Vercel Functions
+ * 2. Local (开发) - 使用本地 Express 后端
+ * 3. Disabled - 仅使用 localStorage
  */
 
 import regionApiService from './regionApiService';
+import { getApiMode } from '../utils/apiClient';
 
 class StorageService {
   constructor() {
@@ -13,14 +18,18 @@ class StorageService {
     this.syncInterval = null;
     this.listeners = new Set();
     
-    // 配置选项
+    // 根据 API 模式配置选项
+    const apiMode = getApiMode();
     this.config = {
       enableLocalCache: true,
-      enableAutoSync: true, // 重新启用自动同步到数据库
+      enableAutoSync: apiMode !== 'disabled', // 只在 API 可用时启用同步
       syncIntervalMs: 5000, // 5秒自动同步
       maxRetries: 3,
-      retryDelayMs: 1000
+      retryDelayMs: 1000,
+      apiMode: apiMode // 保存 API 模式
     };
+    
+    console.log(`StorageService 初始化 - API 模式: ${apiMode}`);
     
     // 初始化
     this.init();
@@ -40,12 +49,13 @@ class StorageService {
     // 先从本地存储恢复缓存作为备用
     this.restoreLocalCache();
     
-    // 始终尝试从数据库获取最新数据
-    try {
-      const regions = await regionApiService.getAllRegions();
-      
-      // 如果数据库有数据，智能合并而不是覆盖
-      if (regions && Object.keys(regions).length > 0) {
+    // 只在启用后端同步时尝试从数据库获取数据
+    if (this.config.enableAutoSync) {
+      try {
+        const regions = await regionApiService.getAllRegions();
+        
+        // 如果数据库有数据，智能合并而不是覆盖
+        if (regions && Object.keys(regions).length > 0) {
         console.log('从数据库加载数据，准备合并...');
         
         // 智能合并：保留更完整的数据
@@ -93,12 +103,19 @@ class StorageService {
         if (this.localCache.size === 0) {
           console.log('本地缓存也为空，需要手动创建区域配置');
         }
+        }
+      } catch (error) {
+        console.warn('从数据库加载数据失败，使用本地缓存:', error);
+        // 如果本地缓存也为空，这是一个问题
+        if (this.localCache.size === 0) {
+          console.error('数据库和本地缓存都无数据，系统需要初始化');
+        }
       }
-    } catch (error) {
-      console.warn('从数据库加载数据失败，使用本地缓存:', error);
-      // 如果本地缓存也为空，这是一个问题
+    } else {
+      console.log('后端同步已禁用，使用纯前端模式');
+      // 如果本地缓存为空，不报错，让初始化函数处理
       if (this.localCache.size === 0) {
-        console.error('数据库和本地缓存都无数据，系统需要初始化');
+        console.log('本地缓存为空，等待初始化数据');
       }
     }
     
