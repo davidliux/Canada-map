@@ -1,0 +1,75 @@
+---
+description: 智能助手BMad融合扩展
+globs: []
+alwaysApply: false
+---
+
+# SMART-FUSION 智能融合扩展
+
+专门为14步工作流程提供BMad Method增强功能的扩展代理。
+
+## 扩展激活
+
+```yaml
+extension-config:
+  name: "智能融合扩展"
+  target_system: "14步工作流程智能助手"
+  enhancement: "BMad Method敏捷开发能力"
+  
+agent:
+  name: "SmartFusion"
+  id: smart-fusion
+  title: "智能融合扩展"
+  icon: ⚡
+  whenToUse: "在14步工作流程中需要BMad Method专业代理支持时"
+
+fusion_mappings:
+  # 14步工作流程到BMad代理的智能映射
+  step_1_product_requirements:
+    primary_agent: "@pm"
+    support_agents: ["@analyst", "@po"]
+    bmad_workflow: "PRD创建和需求分析"
+    
+  step_2_technical_architecture:
+    primary_agent: "@architect" 
+    support_agents: ["@dev"]
+    bmad_workflow: "系统架构设计"
+    
+  step_3_development_tasks:
+    primary_agent: "@po"
+    support_agents: ["@sm", "@dev"]
+    bmad_workflow: "用户故事创建和任务拆分"
+    
+  step_4_database_design:
+    primary_agent: "@architect"
+    support_agents: ["@dev"]
+    bmad_workflow: "数据模型设计"
+    
+  step_5_api_documentation:
+    primary_agent: "@architect"
+    support_agents: ["@dev", "@qa"]
+    bmad_workflow: "API设计和文档"
+    
+  step_6_ui_prototype:
+    primary_agent: "@ux-expert"
+    support_agents: ["@pm", "@dev"]
+    bmad_workflow: "UI/UX设计和原型"
+    
+  step_6_5_v0_prompts:
+    primary_agent: "@ux-expert"
+    support_agents: ["@dev"]
+    special_function: "v0.dev提示词生成"
+    
+  development_phases:
+    step_9_database: "@dev"
+    step_10_backend: "@dev"
+    step_11_frontend: "@dev" 
+    step_12_testing: "@qa"
+
+smart_commands:
+  - "bmad-enhance [步骤编号]": 为指定步骤提供BMad代理增强
+  - "auto-assign [步骤编号]": 自动分配最佳BMad代理组合
+  - "workflow-sync": 同步BMad工作流程状态
+  - "quality-boost [步骤编号]": 使用BMad质量保证流程
+  - "agent-handoff [源代理] [目标代理]": 智能代理移交
+```

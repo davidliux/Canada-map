@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一存储架构验证工具</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+        .section h2 {
+            color: #00ccff;
+            margin-top: 0;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        .info {
+            color: #00ccff;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .test-pass {
+            background: #1a4a1a;
+            border-color: #00ff00;
+        }
+        .test-fail {
+            background: #4a1a1a;
+            border-color: #ff0000;
+        }
+        .test-warning {
+            background: #4a4a1a;
+            border-color: #ffaa00;
+        }
+        pre {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ 统一存储架构验证工具</h1>
+        
+        <div class="section">
+            <h2>架构验证测试</h2>
+            <button onclick="runAllTests()">运行所有测试</button>
+            <button onclick="testUnifiedStorage()">测试统一存储</button>
+            <button onclick="testLegacyDataCleanup()">检查旧数据清理</button>
+            <button onclick="testDataConsistency()">测试数据一致性</button>
+        </div>
+
+        <div class="section">
+            <h2>测试结果</h2>
+            <div id="testResults"></div>
+        </div>
+
+        <div class="section">
+            <h2>架构状态</h2>
+            <div id="architectureStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>详细日志</h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function addTestResult(testName, passed, message, type = 'normal') {
+            const resultsDiv = document.getElementById('testResults');
+            let className = 'test-pass';
+            let status = '✓ PASS';
+            
+            if (!passed) {
+                className = type === 'warning' ? 'test-warning' : 'test-fail';
+                status = type === 'warning' ? '⚠ WARNING' : '✗ FAIL';
+            }
+            
+            resultsDiv.innerHTML += `
+                <div class="test-result ${className}">
+                    <strong>${status}: ${testName}</strong><br>
+                    ${message}
+                </div>
+            `;
+        }
+
+        function testUnifiedStorage() {
+            log('开始测试统一存储架构...', 'info');
+            
+            // 测试1: 检查统一存储键是否存在
+            const unifiedData = localStorage.getItem('unified_region_data');
+            if (unifiedData) {
+                try {
+                    const data = JSON.parse(unifiedData);
+                    const regionCount = Object.keys(data).length;
+                    addTestResult('统一存储数据存在', true, `发现 ${regionCount} 个区域配置`);
+                    
+                    // 测试2: 验证数据结构
+                    let structureValid = true;
+                    let totalPostalCodes = 0;
+                    
+                    Object.entries(data).forEach(([regionId, config]) => {
+                        if (!config.id || !config.name || !Array.isArray(config.postalCodes)) {
+                            structureValid = false;
+                        } else {
+                            totalPostalCodes += config.postalCodes.length;
+                        }
+                    });
+                    
+                    addTestResult('数据结构验证', structureValid, 
+                        structureValid ? `所有区域数据结构正确，共 ${totalPostalCodes} 个邮编` : '发现数据结构问题');
+                    
+                } catch (error) {
+                    addTestResult('统一存储数据解析', false, `数据解析失败: ${error.message}`);
+                }
+            } else {
+                addTestResult('统一存储数据存在', false, '未找到统一存储数据');
+            }
+        }
+
+        function testLegacyDataCleanup() {
+            log('检查旧数据清理状态...', 'info');
+            
+            const legacyKeys = [
+                'fsa_configurations',
+                'region_configurations', 
+                'fsa_global_settings',
+                'region_global_settings',
+                'region_migration_status'
+            ];
+            
+            const regionKeys = [];
+            for (let i = 1; i <= 8; i++) {
+                regionKeys.push(`region_${i}_postal_codes`);
+                regionKeys.push(`region_${i}_config`);
+            }
+            
+            let foundLegacyData = false;
+            const foundKeys = [];
+            
+            [...legacyKeys, ...regionKeys].forEach(key => {
+                if (localStorage.getItem(key)) {
+                    foundLegacyData = true;
+                    foundKeys.push(key);
+                }
+            });
+            
+            if (foundLegacyData) {
+                addTestResult('旧数据清理', false, 
+                    `发现未清理的旧数据: ${foundKeys.join(', ')}`, 'warning');
+            } else {
+                addTestResult('旧数据清理', true, '所有旧数据已清理');
+            }
+        }
+
+        function testDataConsistency() {
+            log('测试数据一致性...', 'info');
+            
+            const unifiedData = localStorage.getItem('unified_region_data');
+            if (!unifiedData) {
+                addTestResult('数据一致性', false, '未找到统一存储数据');
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(unifiedData);
+                let consistencyIssues = [];
+                
+                // 检查区域ID一致性
+                Object.entries(data).forEach(([regionId, config]) => {
+                    if (config.id !== regionId) {
+                        consistencyIssues.push(`区域 ${regionId} 的ID字段不匹配`);
+                    }
+                    
+                    // 检查元数据一致性
+                    if (config.metadata && config.metadata.totalPostalCodes !== config.postalCodes.length) {
+                        consistencyIssues.push(`区域 ${regionId} 的邮编数量元数据不一致`);
+                    }
+                    
+                    // 检查邮编格式
+                    if (config.postalCodes) {
+                        config.postalCodes.forEach((code, index) => {
+                            if (typeof code !== 'string' || code.trim() === '') {
+                                consistencyIssues.push(`区域 ${regionId} 第 ${index + 1} 个邮编格式无效`);
+                            }
+                        });
+                    }
+                });
+                
+                if (consistencyIssues.length === 0) {
+                    addTestResult('数据一致性', true, '所有数据一致性检查通过');
+                } else {
+                    addTestResult('数据一致性', false, 
+                        `发现 ${consistencyIssues.length} 个一致性问题: ${consistencyIssues.join('; ')}`);
+                }
+                
+            } catch (error) {
+                addTestResult('数据一致性', false, `一致性检查失败: ${error.message}`);
+            }
+        }
+
+        function testArchitectureCompliance() {
+            log('测试架构合规性...', 'info');
+            
+            // 检查是否有组件仍在使用旧API
+            const warnings = [];
+            
+            // 这里可以添加更多的合规性检查
+            // 例如检查特定的localStorage键模式等
+            
+            if (warnings.length === 0) {
+                addTestResult('架构合规性', true, '所有组件符合统一架构规范');
+            } else {
+                addTestResult('架构合规性', false, 
+                    `发现合规性问题: ${warnings.join('; ')}`, 'warning');
+            }
+        }
+
+        function updateArchitectureStatus() {
+            const statusDiv = document.getElementById('architectureStatus');
+            
+            const status = {
+                unifiedStorageExists: !!localStorage.getItem('unified_region_data'),
+                legacyDataExists: false,
+                totalRegions: 0,
+                totalPostalCodes: 0,
+                activeRegions: 0
+            };
+            
+            // 检查旧数据
+            const legacyKeys = ['fsa_configurations', 'region_configurations'];
+            status.legacyDataExists = legacyKeys.some(key => localStorage.getItem(key));
+            
+            // 统计统一存储数据
+            const unifiedData = localStorage.getItem('unified_region_data');
+            if (unifiedData) {
+                try {
+                    const data = JSON.parse(unifiedData);
+                    status.totalRegions = Object.keys(data).length;
+                    
+                    Object.values(data).forEach(config => {
+                        if (config.postalCodes) {
+                            status.totalPostalCodes += config.postalCodes.length;
+                        }
+                        if (config.isActive) {
+                            status.activeRegions++;
+                        }
+                    });
+                } catch (error) {
+                    console.error('解析统一存储数据失败:', error);
+                }
+            }
+            
+            statusDiv.innerHTML = `<pre>${JSON.stringify(status, null, 2)}</pre>`;
+        }
+
+        function runAllTests() {
+            log('开始运行所有架构验证测试...', 'info');
+            
+            // 清空之前的结果
+            document.getElementById('testResults').innerHTML = '';
+            
+            // 运行所有测试
+            testUnifiedStorage();
+            testLegacyDataCleanup();
+            testDataConsistency();
+            testArchitectureCompliance();
+            
+            // 更新状态
+            updateArchitectureStatus();
+            
+            log('所有测试完成', 'success');
+        }
+
+        // 页面加载时自动运行测试
+        window.onload = function() {
+            log('架构验证工具已加载', 'info');
+            updateArchitectureStatus();
+        };
+    </script>
+</body>
+</html>

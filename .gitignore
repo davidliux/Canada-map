@@ -1,0 +1,116 @@
+# Dependencies
+node_modules/
+.npm
+.pnpm-debug.log*
+.yarn-integrity
+.yarn-error.log
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# Electron build outputs - 不推送构建产物
+/release/
+/app/dist/
+/dist_electron/
+/dist-electron/
+
+# Windows executable and packages - 不推送打包文件
+*.exe
+*.msi
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.AppImage
+
+# Build release directories - 不推送发布目录
+Windows_Release_*/
+Windows_兼容版_*/
+Release_*/
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# System files
+**/thumbs.db
+**/.DS_Store
+
+# Temporary files
+.tmp/
+.temp/
+
+# 不推送构建和打包相关的临时文件
+build/
+out/
+app-builds/
+
+# Vercel
+.vercel
+.env*.local
+
+# Backend database
+backend/prisma/*.db
+backend/prisma/*.db-journal
+backend/.env
+
+# Development files
+*.test.js
+*.test.jsx
+test-*.js
+test-*.html
+debug-*.js
+debug_*.html
+create_test_data.html
+test_*.html
+
+# Documentation that shouldn't be in repo
+*_GUIDE.md
+*_FIX.md
+*_DEBUG*.md
+*_ARCHITECTURE.md
+*_SUMMARY.md 

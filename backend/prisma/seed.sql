@@ -1,0 +1,2 @@
+-- optional seed for docker initdb
+-- left intentionally minimal; prisma seed will handle main data
