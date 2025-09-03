@@ -1,30 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "npm run build && cd backend && npm install && npx prisma generate",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "functions": {
-    "backend/api/index.js": {
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/backend/api/index.js"
-    },
     {
       "source": "/(.*)",
       "destination": "/$1"
     }
-  ],
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "NODE_ENV": "production"
-  },
-  "build": {
-    "env": {
-      "DATABASE_URL": "@database_url"
-    }
-  }
+  ]
 }
