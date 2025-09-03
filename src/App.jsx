@@ -8,6 +8,7 @@ import compatLayer from './utils/unifiedStorageCompat'; // 导入兼容层
 import './utils/quickSetup.js'; // 加载快速启动脚本
 import './utils/demoSetup.js'; // 加载演示设置脚本
 import { initializeSystemData } from './utils/initializeData'; // 导入初始化函数
+import { runAllFixes } from './utils/dataFixer'; // 导入数据修复工具
 
 function App() {
   // 初始化存储兼容层和系统数据
@@ -17,6 +18,9 @@ function App() {
     const isInitialized = sessionStorage.getItem(initKey);
     
     if (!isInitialized) {
+      // 先运行数据修复
+      const needsFix = runAllFixes();
+      
       compatLayer.init().then(() => {
         console.log('存储兼容层初始化完成');
         
@@ -28,6 +32,11 @@ function App() {
         
         // 标记初始化完成
         sessionStorage.setItem(initKey, 'true');
+        
+        // 如果修复了数据，提示用户刷新
+        if (needsFix) {
+          console.log('🔄 数据已修复，建议刷新页面');
+        }
       }).catch(error => {
         console.error('存储兼容层初始化失败:', error);
         // 即使失败也标记，避免无限重试
@@ -35,6 +44,8 @@ function App() {
       });
     } else {
       console.log('应用已初始化，跳过重复初始化');
+      // 仍然运行数据修复检查
+      runAllFixes();
     }
   }, []);
 

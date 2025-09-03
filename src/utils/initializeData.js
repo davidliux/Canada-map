@@ -13,39 +13,39 @@ const DEFAULT_REGION_ASSIGNMENTS = {
     name: '1区',
     fsa: deliverableFSAs.slice(0, 260), // 前260个FSA分配给1区
     postalCodes: [],
-    weightRanges: {
-      '0-10': { min: 0, max: 10, price: 15.99, isActive: true },
-      '10-20': { min: 10, max: 20, price: 25.99, isActive: true },
-      '20-30': { min: 20, max: 30, price: 35.99, isActive: true },
-      '30-50': { min: 30, max: 50, price: 55.99, isActive: true },
-      '50-100': { min: 50, max: 100, price: 99.99, isActive: true }
-    }
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 15.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 25.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 35.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 55.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 99.99, isActive: true }
+    ]
   },
   '2': {
     id: '2',
     name: '2区',
     fsa: deliverableFSAs.slice(260, 400), // 接下来140个FSA给2区
     postalCodes: [],
-    weightRanges: {
-      '0-10': { min: 0, max: 10, price: 18.99, isActive: true },
-      '10-20': { min: 10, max: 20, price: 29.99, isActive: true },
-      '20-30': { min: 20, max: 30, price: 39.99, isActive: true },
-      '30-50': { min: 30, max: 50, price: 59.99, isActive: true },
-      '50-100': { min: 50, max: 100, price: 109.99, isActive: true }
-    }
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 18.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 29.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 39.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 59.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 109.99, isActive: true }
+    ]
   },
   '3': {
     id: '3',
     name: '3区',
     fsa: deliverableFSAs.slice(400, 500),
     postalCodes: [],
-    weightRanges: {
-      '0-10': { min: 0, max: 10, price: 22.99, isActive: true },
-      '10-20': { min: 10, max: 20, price: 35.99, isActive: true },
-      '20-30': { min: 20, max: 30, price: 45.99, isActive: true },
-      '30-50': { min: 30, max: 50, price: 69.99, isActive: true },
-      '50-100': { min: 50, max: 100, price: 129.99, isActive: true }
-    }
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 22.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 35.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 45.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 69.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 129.99, isActive: true }
+    ]
   }
 };
 
