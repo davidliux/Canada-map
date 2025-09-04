@@ -249,11 +249,45 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
       printQuotation(fsaCode);
     };
 
+    // 添加全局搜索触发函数
+    window.triggerMapSearch = (query) => {
+      if (!query || !mapInstance || !mapData) return;
+      
+      const searchTerm = query.trim().toUpperCase();
+      console.log('🔍 触发地图搜索:', searchTerm);
+      
+      // 查找匹配的FSA
+      const matchingFeature = mapData.features?.find(feature => {
+        const fsaCode = feature.properties?.CFSAUID;
+        return fsaCode === searchTerm || (searchTerm.length >= 3 && fsaCode === searchTerm.substring(0, 3));
+      });
+      
+      if (matchingFeature) {
+        console.log('✅ 找到匹配的FSA:', matchingFeature.properties.CFSAUID);
+        
+        // 创建该FSA的边界
+        const layer = L.geoJSON(matchingFeature);
+        const bounds = layer.getBounds();
+        
+        // 聚焦到该FSA
+        if (bounds.isValid() && mapInstance.fitBounds) {
+          mapInstance.fitBounds(bounds, {
+            padding: [50, 50],
+            maxZoom: 12,
+            animate: true
+          });
+        }
+      } else {
+        console.log('❌ 未找到匹配的FSA:', searchTerm);
+      }
+    };
+
     return () => {
       delete window.openFSAManagement;
       delete window.printQuotation;
+      delete window.triggerMapSearch;
     };
-  }, [onFSAClick]);
+  }, [onFSAClick, mapInstance, mapData]);
 
   // 监听外部传入的FSA数据变化
   useEffect(() => {
@@ -325,8 +359,23 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         });
         
         if (fsaBoundariesData && fsaBoundariesData.features) {
-          // 使用配送区域筛选器过滤FSA数据
-          const processed = await filterMapDataByDeliveryArea(fsaBoundariesData, selectedRegions);
+          // 首先过滤只保留可配送的FSA（来自deliverableFSA.js的列表）
+          const deliverableFSASet = new Set(currentDeliverableFSAs);
+          const deliverableFeatures = fsaBoundariesData.features.filter(feature => {
+            const fsaCode = feature.properties?.CFSAUID;
+            return fsaCode && deliverableFSASet.has(fsaCode);
+          });
+          
+          console.log(`🚚 可配送FSA过滤: ${fsaBoundariesData.features.length} -> ${deliverableFeatures.length} 个FSA`);
+          
+          // 创建只包含可配送FSA的数据对象
+          const deliverableData = {
+            ...fsaBoundariesData,
+            features: deliverableFeatures
+          };
+          
+          // 然后根据选中的区域进一步过滤
+          const processed = await filterMapDataByDeliveryArea(deliverableData, selectedRegions);
 
           console.log('🎯 配送区域筛选完成:', processed.features.length, '个FSA区域');
           console.log('📊 筛选统计:', processed.metadata);
@@ -503,11 +552,33 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     
     useEffect(() => {
       if (map) {
+        let resizeObserver = null;
+        
         // 等待地图完全初始化
         map.whenReady(() => {
           setMapInstance(map);
           console.log('✅ 地图实例已设置并准备就绪');
+          
+          // 监听容器大小变化并刷新地图
+          resizeObserver = new ResizeObserver(() => {
+            // 延迟一点以确保容器动画完成
+            setTimeout(() => {
+              map.invalidateSize();
+              console.log('📐 地图大小已刷新');
+            }, 350);
+          });
+          
+          if (map._container && map._container.parentElement) {
+            resizeObserver.observe(map._container.parentElement);
+          }
         });
+        
+        // 清理函数
+        return () => {
+          if (resizeObserver) {
+            resizeObserver.disconnect();
+          }
+        };
       }
     }, [map]);
     

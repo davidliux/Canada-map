@@ -15,13 +15,17 @@ import {
   HelpCircle,
   Filter,
   Database,
-  Zap
+  Zap,
+  ChevronLeft,
+  ChevronRight,
+  Search
 } from 'lucide-react';
 import AnimatedSearchBox from '../components/AnimatedSearchBox';
 import FilterButtonGroup from '../components/FilterButtonGroup';
 
 const MainLayout = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // 默认关闭
+  const [searchModalOpen, setSearchModalOpen] = useState(false); // 搜索弹窗状态
   const location = useLocation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,12 +46,36 @@ const MainLayout = () => {
   // 判断是否为主页（数据大屏）
   const isDashboard = location.pathname === '/';
 
+  // 暂时禁用快捷键功能
+  // React.useEffect(() => {
+  //   const handleKeyDown = (e) => {
+  //     // Ctrl+Enter (Windows/Linux) 或 Cmd+Enter (Mac)
+  //     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  //       e.preventDefault();
+  //       setSearchModalOpen(true);
+  //     }
+  //     // ESC 键关闭搜索弹窗
+  //     if (e.key === 'Escape' && searchModalOpen) {
+  //       setSearchModalOpen(false);
+  //     }
+  //   };
+
+  //   if (isDashboard) {
+  //     window.addEventListener('keydown', handleKeyDown);
+  //     return () => window.removeEventListener('keydown', handleKeyDown);
+  //   }
+  // }, [isDashboard, searchModalOpen]);
+
   // 搜索处理
   const handleSearch = (query) => {
     setSearchQuery(query);
     // 将搜索查询传递给Dashboard组件
     if (window.mapSearchHandler) {
       window.mapSearchHandler(query);
+    }
+    // 直接触发地图定位
+    if (window.triggerMapSearch) {
+      window.triggerMapSearch(query);
     }
   };
 
@@ -100,20 +128,51 @@ const MainLayout = () => {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+      {/* 移除背景遮罩，保持主界面高亮 */}
+
+      {/* 搜索弹窗 - 暂时禁用 */}
+      
+      {/* 悬浮按钮 - 更加精致和低调的设计 */}
+      {!sidebarOpen && isDashboard && (
+        <motion.button
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 0.7, x: 0 }}
+          whileHover={{ opacity: 1, x: 5 }}
+          transition={{ duration: 0.2 }}
+          onClick={() => setSidebarOpen(true)}
+          className="fixed left-0 top-24 z-40 bg-gray-800/80 hover:bg-gray-700/90 text-gray-400 hover:text-white py-3 px-2 rounded-r-lg backdrop-blur-sm border-y border-r border-gray-700/50 transition-all duration-200 group"
+          title="打开筛选面板"
+        >
+          <div className="flex flex-col items-center space-y-1">
+            <div className="flex space-x-0.5">
+              <div className="w-1 h-1 bg-current rounded-full"></div>
+              <div className="w-1 h-1 bg-current rounded-full"></div>
+              <div className="w-1 h-1 bg-current rounded-full"></div>
+            </div>
+            <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.button>
       )}
 
-      {/* Sidebar - 扩大宽度从w-64到w-80 */}
+      {/* Sidebar - 默认隐藏，通过按钮控制显示 */}
       <div className={`
         fixed top-0 left-0 z-50 h-full w-80 bg-gray-800 transform transition-transform duration-300 ease-in-out
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0
+        ${sidebarOpen ? 'translate-x-0 shadow-[0_0_50px_rgba(0,0,0,0.5)]' : '-translate-x-full'}
       `}>
+        {/* 侧边栏右边缘的关闭按钮 - 精致设计 */}
+        {sidebarOpen && isDashboard && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.7 }}
+            whileHover={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            onClick={() => setSidebarOpen(false)}
+            className="absolute -right-8 top-24 bg-gray-800/80 hover:bg-gray-700/90 text-gray-400 hover:text-white py-3 px-1.5 rounded-r-lg backdrop-blur-sm border-y border-r border-gray-700/50 transition-all duration-200"
+            title="关闭筛选面板"
+          >
+            <ChevronLeft className="w-3 h-3" />
+          </motion.button>
+        )}
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center justify-between px-4 bg-gray-900">
@@ -123,7 +182,8 @@ const MainLayout = () => {
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-400 hover:text-white"
+              className="text-gray-400 hover:text-white transition-colors"
+              title="关闭面板"
             >
               <X className="w-6 h-6" />
             </button>
@@ -230,21 +290,18 @@ const MainLayout = () => {
         </div>
       </div>
 
-      {/* Main content - 更新左边距以匹配新的边栏宽度，确保高度占满 */}
-      <div className="lg:pl-80 h-screen flex flex-col">
+      {/* Main content - 根据侧边栏状态动态调整 */}
+      <div className={`h-screen flex flex-col transition-all duration-300 ease-in-out ${
+        sidebarOpen && isDashboard ? 'ml-80' : 'ml-0'
+      }`}>
         {/* Top bar - 压缩顶部栏高度 */}
         <div className="sticky top-0 z-30 flex h-12 bg-gray-800 shadow-lg flex-shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="px-4 text-gray-400 hover:text-white focus:outline-none lg:hidden"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-
-          <div className="flex flex-1 items-center justify-between px-4">
-            <div className="flex items-center space-x-2 text-gray-300">
-              <BarChart3 className="w-5 h-5" />
-              <span className="text-sm">系统状态: 正常运行</span>
+          <div className="flex flex-1 items-center justify-between px-6">
+            <div className="flex items-center space-x-4 text-gray-300">
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5" />
+                <span className="text-sm">系统状态: 正常运行</span>
+              </div>
             </div>
 
             <div className="flex items-center space-x-4">
