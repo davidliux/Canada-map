@@ -16,6 +16,19 @@ export const supabase = supabaseUrl && supabaseAnonKey
         persistSession: true,
         autoRefreshToken: true,
       },
+      global: {
+        headers: {
+          'x-client-info': 'canada-postal-map'
+        }
+      },
+      db: {
+        schema: 'public'
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      }
     })
   : null;
 
@@ -40,7 +53,14 @@ export const regionService = {
         .select('*')
         .order('id');
       
-      if (error) throw error;
+      if (error) {
+        // 如果表不存在，返回空对象而不是抛出错误
+        if (error.code === '42P01') {
+          console.log('regions 表尚未创建，请先在 Supabase 中创建表');
+          return {};
+        }
+        throw error;
+      }
       
       // 转换为兼容的格式
       const regions = {};
@@ -57,7 +77,8 @@ export const regionService = {
       return regions;
     } catch (error) {
       console.error('获取区域数据失败:', error);
-      return null;
+      // 返回空对象而不是 null，避免应用崩溃
+      return {};
     }
   },
 
@@ -74,7 +95,13 @@ export const regionService = {
         .eq('id', id)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        if (error.code === '42P01' || error.code === 'PGRST116') {
+          console.log('区域不存在或表未创建');
+          return null;
+        }
+        throw error;
+      }
       
       return {
         ...data,
@@ -304,11 +331,12 @@ if (typeof window !== 'undefined') {
   
   if (isSupabaseConfigured()) {
     console.log('✅ Supabase 已配置并连接');
+    console.log('  - URL:', supabaseUrl);
     console.log('  - 使用 supabaseService.regions 访问区域数据');
     console.log('  - 使用 supabaseService.migration.migrateFromLocalStorage() 迁移数据');
   } else {
     console.log('⚠️ Supabase 未配置，使用本地存储');
-    console.log('  - 请在 .env.local 中配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY');
+    console.log('  - 请在 .env 中配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY');
   }
 }
 
