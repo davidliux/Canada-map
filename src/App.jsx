@@ -10,9 +10,13 @@ import './utils/demoSetup.js'; // 加载演示设置脚本
 import { initializeSystemData } from './utils/initializeData'; // 导入初始化函数
 // import { runAllFixes } from './utils/dataFixer'; // 禁用自动数据修复，避免覆盖数据库
 // import { runFullRepair } from './utils/dataRepairTool'; // 禁用数据修复工具
-import './utils/debugHelper.js'; // 加载调试助手
-import './utils/emergencyFix.js'; // 紧急修复工具
-import './utils/initializeSupabaseData'; // 加载 Supabase 数据初始化工具
+
+// 仅在开发环境加载调试工具
+if (import.meta.env.DEV) {
+  import('./utils/debugHelper.js').catch(() => {}); // 加载调试助手
+  import('./utils/emergencyFix.js').catch(() => {}); // 紧急修复工具
+  import('./utils/initializeSupabaseData').catch(() => {}); // 加载 Supabase 数据初始化工具
+}
 
 function App() {
   // 初始化存储兼容层和系统数据
