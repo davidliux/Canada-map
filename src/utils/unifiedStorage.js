@@ -331,16 +331,22 @@ export const getRegionStats = async (regionId) => {
     return {
       totalFSAs: 0,
       activeFSAs: 0,
-      totalFSAs: 0,
+      totalPostalCodes: 0,
       totalPrice: 0,
       activeWeightRanges: 0
     };
   }
 
   // 支持多种字段名（Supabase 和本地存储格式）
-  const fsaCodes = config.fsaCodes || config.fsa_codes || [];
+  const fsaCodes = config.fsaCodes || config.fsa_codes || config.fsa || [];
   const postalCodes = config.postalCodes || config.postal_codes || [];
   const weightRanges = config.weightRanges || config.weight_ranges || [];
+  
+  // 调试日志
+  if (regionId === '1') {
+    console.log(`区域 ${regionId} 原始配置:`, config);
+    console.log(`FSA 数据 (fsaCodes):`, fsaCodes.length, fsaCodes.slice(0, 5));
+  }
   
   // 计算活跃的重量区间
   const activeWeightRanges = weightRanges.filter(range => range.isActive);
