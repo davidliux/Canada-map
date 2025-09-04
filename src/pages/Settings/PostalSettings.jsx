@@ -30,8 +30,8 @@ const PostalSettings = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const configsObj = getAllRegionConfigs();
+  const loadData = async () => {
+    const configsObj = await getAllRegionConfigs(true); // 改为异步调用并强制刷新
     const configs = Object.values(configsObj || {});
     setRegions(configs);
     calculateStats(configs);

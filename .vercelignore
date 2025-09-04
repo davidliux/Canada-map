@@ -1,0 +1,59 @@
+# Vercel 部署忽略文件
+
+# SQL 文件（开发用）
+*.sql
+
+# 后端目录（如果使用 Serverless Functions）
+backend/
+
+# 脚本和开发工具
+scripts/
+
+# 调试和测试文件
+src/utils/debug*
+src/utils/*Test.js
+src/utils/emergencyFix.js
+src/utils/dataRepairTool.js
+
+# Electron 相关
+electron.js
+dist-electron/
+electron-builder.yml
+
+# 开发配置
+.env.development
+.env.local
+CLAUDE.md
+.cursor/
+
+# 文档（可选，如果不需要在部署中包含）
+SUPABASE_SETUP.md
+docs/
+
+# Git 和编辑器文件
+.git
+.gitignore
+.vscode
+.idea
+
+# 测试文件
+**/*.test.js
+**/*.spec.js
+test/
+tests/
+
+# 临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 构建缓存
+.cache/
+.parcel-cache/

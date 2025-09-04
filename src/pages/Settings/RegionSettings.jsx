@@ -17,8 +17,8 @@ const RegionSettings = () => {
     loadRegions();
   }, []);
 
-  const loadRegions = () => {
-    const configsObj = getAllRegionConfigs();
+  const loadRegions = async () => {
+    const configsObj = await getAllRegionConfigs(true); // 改为异步调用并强制刷新
     const configs = Object.values(configsObj || {}).map(config => ({
       ...config,
       id: config.id || Math.random().toString(36).substr(2, 9)

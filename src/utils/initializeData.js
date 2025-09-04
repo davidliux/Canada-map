@@ -11,7 +11,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '1': {
     id: '1',
     name: '1区',
-    fsa: deliverableFSAs.slice(0, 260), // 前260个FSA分配给1区
+    fsaCodes: deliverableFSAs.slice(0, 260), // 前260个FSA分配给1区
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 15.99, isActive: true },
@@ -24,7 +24,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '2': {
     id: '2',
     name: '2区',
-    fsa: deliverableFSAs.slice(260, 400), // 接下来140个FSA给2区
+    fsaCodes: deliverableFSAs.slice(260, 400), // 接下来140个FSA给2区
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 18.99, isActive: true },
@@ -37,7 +37,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '3': {
     id: '3',
     name: '3区',
-    fsa: deliverableFSAs.slice(400, 500),
+    fsaCodes: deliverableFSAs.slice(400, 500),
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 22.99, isActive: true },
@@ -45,6 +45,71 @@ const DEFAULT_REGION_ASSIGNMENTS = {
       { id: '20-30', min: 20, max: 30, price: 45.99, isActive: true },
       { id: '30-50', min: 30, max: 50, price: 69.99, isActive: true },
       { id: '50-100', min: 50, max: 100, price: 129.99, isActive: true }
+    ]
+  },
+  '4': {
+    id: '4',
+    name: '4区',
+    fsaCodes: deliverableFSAs.slice(500, 646), // 分配146个FSA给4区
+    postalCodes: [],
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 24.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 38.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 48.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 72.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 139.99, isActive: true }
+    ]
+  },
+  '5': {
+    id: '5',
+    name: '5区',
+    fsaCodes: deliverableFSAs.slice(646, 678), // 分配32个FSA给5区
+    postalCodes: [],
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 26.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 42.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 52.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 78.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 149.99, isActive: true }
+    ]
+  },
+  '6': {
+    id: '6',
+    name: '6区',
+    fsaCodes: deliverableFSAs.slice(678, 678), // 暂时没有分配FSA
+    postalCodes: [],
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 28.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 45.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 55.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 82.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 159.99, isActive: true }
+    ]
+  },
+  '7': {
+    id: '7',
+    name: '7区',
+    fsaCodes: deliverableFSAs.slice(678, 678), // 暂时没有分配FSA
+    postalCodes: [],
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 30.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 48.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 58.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 86.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 169.99, isActive: true }
+    ]
+  },
+  '8': {
+    id: '8',
+    name: '8区',
+    fsaCodes: deliverableFSAs.slice(678, 678), // 暂时没有分配FSA
+    postalCodes: [],
+    weightRanges: [
+      { id: '0-10', min: 0, max: 10, price: 32.99, isActive: true },
+      { id: '10-20', min: 10, max: 20, price: 52.99, isActive: true },
+      { id: '20-30', min: 20, max: 30, price: 62.99, isActive: true },
+      { id: '30-50', min: 30, max: 50, price: 92.99, isActive: true },
+      { id: '50-100', min: 50, max: 100, price: 179.99, isActive: true }
     ]
   }
 };

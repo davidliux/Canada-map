@@ -38,10 +38,10 @@ const BatchPriceManager = ({ onConfigChange, className = '' }) => {
     loadRegionStatus();
   }, []);
 
-  const loadRegionStatus = () => {
+  const loadRegionStatus = async () => {
     setIsLoading(true);
     try {
-      const regionConfigs = getAllRegionConfigs();
+      const regionConfigs = await getAllRegionConfigs(true); // 改为异步调用并强制刷新
       const status = {};
 
       // 检查每个区域的配置状态

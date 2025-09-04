@@ -2,9 +2,11 @@
  * 统一数据存储架构
  * 替代原有的双重存储机制（fsa_configurations + region_X_postal_codes）
  * 使用单一的区域配置格式存储所有数据
+ * 优先使用 Supabase，降级到 localStorage
  */
 
 import storageService from '../services/storageService';
+import { regionService, isSupabaseConfigured } from '../services/supabaseClient';
 
 // 统一存储键名常量
 export const UNIFIED_STORAGE_KEYS = {
@@ -84,22 +86,28 @@ export const initializeDefaultRegions = () => {
  */
 export const getAllRegionConfigs = async (forceRefresh = false) => {
   try {
-    // 使用存储服务获取数据（自动处理缓存和API调用）
-    const regions = await storageService.getAllRegions(forceRefresh);
-    return regions;
+    // 只使用 Supabase，不再回退到本地存储
+    if (isSupabaseConfigured()) {
+      console.log('🌐 从 Supabase 加载数据...');
+      const supabaseRegions = await regionService.getAllRegions();
+      if (supabaseRegions && Object.keys(supabaseRegions).length > 0) {
+        console.log('✅ 成功从 Supabase 加载', Object.keys(supabaseRegions).length, '个区域');
+        return supabaseRegions;
+      } else {
+        // 数据库没有任何区域数据，这应该是首次使用
+        // 注意：不要自动创建空区域，保持数据库现有数据
+        console.log('⚠️ 数据库中暂无区域数据');
+        // 返回空对象而不是创建默认区域
+        return {};
+      }
+    } else {
+      console.error('❌ Supabase 未配置');
+      return {};
+    }
   } catch (error) {
     console.error('获取区域配置失败:', error);
-    // 如果API失败，尝试从localStorage获取
-    try {
-      const stored = localStorage.getItem(UNIFIED_STORAGE_KEYS.REGION_DATA);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (localError) {
-      console.error('本地存储也失败:', localError);
-    }
-    // 返回默认配置
-    return initializeDefaultRegions();
+    // 返回空对象而不是默认配置
+    return {};
   }
 };
 
@@ -110,8 +118,14 @@ export const getAllRegionConfigs = async (forceRefresh = false) => {
  */
 export const getRegionConfig = async (regionId) => {
   try {
-    const region = await storageService.getRegion(regionId);
-    return region;
+    // 只从 Supabase 获取
+    if (isSupabaseConfigured()) {
+      const region = await regionService.getRegion(regionId);
+      return region;
+    } else {
+      console.error('❌ Supabase 未配置');
+      return null;
+    }
   } catch (error) {
     console.error(`获取区域 ${regionId} 配置失败:`, error);
     return null;
@@ -133,11 +147,24 @@ export const saveRegionConfig = async (regionId, config) => {
       return false;
     }
 
-    // 使用存储服务更新区域（自动处理本地缓存和API同步）
-    await storageService.updateRegion(regionId, config);
-    
-    console.log(`区域 ${regionId} 配置保存成功`);
-    return true;
+    // 只使用 Supabase，不再保存到本地
+    if (isSupabaseConfigured()) {
+      console.log('💾 保存到 Supabase...');
+      const saved = await regionService.upsertRegion({
+        ...config,
+        id: regionId
+      });
+      if (saved) {
+        console.log(`✅ 区域 ${regionId} 已保存到数据库`);
+        return true;
+      } else {
+        console.error(`❌ 区域 ${regionId} 保存失败`);
+        return false;
+      }
+    } else {
+      console.error('❌ Supabase 未配置，无法保存');
+      return false;
+    }
   } catch (error) {
     console.error('保存区域配置失败:', error);
     return false;
@@ -149,11 +176,23 @@ export const saveRegionConfig = async (regionId, config) => {
  * @param {Object} regionConfigs - 区域配置对象集合
  * @returns {boolean} 保存是否成功
  */
-export const saveAllRegionConfigs = (regionConfigs) => {
+export const saveAllRegionConfigs = async (regionConfigs) => {
   try {
-    localStorage.setItem(UNIFIED_STORAGE_KEYS.REGION_DATA, JSON.stringify(regionConfigs));
-    console.log('区域配置保存成功:', regionConfigs);
-    return true;
+    // 只保存到 Supabase
+    if (isSupabaseConfigured()) {
+      console.log('💾 批量保存到 Supabase...');
+      for (const [id, config] of Object.entries(regionConfigs)) {
+        await regionService.upsertRegion({
+          ...config,
+          id
+        });
+      }
+      console.log('✅ 所有区域配置已保存到数据库');
+      return true;
+    } else {
+      console.error('❌ Supabase 未配置，无法保存');
+      return false;
+    }
   } catch (error) {
     console.error('保存区域配置失败:', error);
     return false;
@@ -165,20 +204,21 @@ export const saveAllRegionConfigs = (regionConfigs) => {
  * @param {string} regionId - 区域ID
  * @returns {boolean} 删除是否成功
  */
-export const deleteRegionConfig = (regionId) => {
+export const deleteRegionConfig = async (regionId) => {
   try {
-    const regionConfigs = getAllRegionConfigs();
-    if (regionConfigs && regionConfigs[regionId]) {
-      delete regionConfigs[regionId];
-      const success = saveAllRegionConfigs(regionConfigs);
+    // 只从 Supabase 删除
+    if (isSupabaseConfigured()) {
+      const success = await regionService.deleteRegion(regionId);
       if (success) {
-        console.log('区域配置删除成功:', regionId);
+        console.log('✅ 区域配置删除成功:', regionId);
         // 触发数据更新通知
         import('./dataUpdateNotifier').then(module => {
           module.notifyRegionUpdate(regionId, 'delete');
         });
         return true;
       }
+    } else {
+      console.error('❌ Supabase 未配置，无法删除');
     }
     return false;
   } catch (error) {
@@ -213,10 +253,21 @@ export const getRegionPostalCodes = getRegionFSAs;
  */
 export const setRegionFSAs = async (regionId, fsaCodes) => {
   try {
-    // 使用存储服务更新FSA
-    await storageService.updateRegionFSAs(regionId, fsaCodes);
-    console.log(`区域 ${regionId} FSA更新成功:`, fsaCodes.length, '个FSA');
-    return true;
+    // 只使用 Supabase，不再保存到本地
+    if (isSupabaseConfigured()) {
+      console.log(`💾 更新区域 ${regionId} 的 FSA 到 Supabase...`);
+      const updated = await regionService.updateRegionFSAs(regionId, fsaCodes);
+      if (updated) {
+        console.log(`✅ 区域 ${regionId} FSA更新到数据库成功:`, fsaCodes.length, '个FSA');
+        return true;
+      } else {
+        console.error(`❌ 区域 ${regionId} FSA更新失败`);
+        return false;
+      }
+    } else {
+      console.error('❌ Supabase 未配置，无法更新FSA');
+      return false;
+    }
   } catch (error) {
     console.error(`设置区域 ${regionId} FSA失败:`, error);
     return false;
@@ -244,7 +295,8 @@ export const validateRegionConfig = (config) => {
     errors.push('区域名称是必填项');
   }
 
-  if (!Array.isArray(config.postalCodes)) {
+  // postalCodes 可以是空数组，但必须是数组类型
+  if (config.postalCodes !== undefined && !Array.isArray(config.postalCodes)) {
     errors.push('邮编列表必须是数组');
   }
 
@@ -273,8 +325,8 @@ export const validateRegionConfig = (config) => {
  * @param {string} regionId - 区域ID
  * @returns {Object} 统计信息
  */
-export const getRegionStats = (regionId) => {
-  const config = getRegionConfig(regionId);
+export const getRegionStats = async (regionId) => {
+  const config = await getRegionConfig(regionId);
   if (!config) {
     return {
       totalFSAs: 0,
@@ -285,24 +337,39 @@ export const getRegionStats = (regionId) => {
     };
   }
 
-  const postalCodes = config.postalCodes || [];
-  const weightRanges = config.weightRanges || [];
+  // 支持多种字段名（Supabase 和本地存储格式）
+  const fsaCodes = config.fsaCodes || config.fsa_codes || [];
+  const postalCodes = config.postalCodes || config.postal_codes || [];
+  const weightRanges = config.weightRanges || config.weight_ranges || [];
+  
+  // 计算活跃的重量区间
   const activeWeightRanges = weightRanges.filter(range => range.isActive);
   const totalPrice = activeWeightRanges.reduce((sum, range) => sum + (range.price || 0), 0);
 
-  // 计算唯一的FSA数量（邮编前3个字符）
-  const uniqueFSAs = new Set();
-  postalCodes.forEach(code => {
-    if (typeof code === 'string' && code.length >= 3) {
-      // 提取FSA（前3个字符）
-      const fsa = code.substring(0, 3).toUpperCase();
-      uniqueFSAs.add(fsa);
-    }
-  });
+  // 优先使用 FSA 数据
+  let totalFSAs = 0;
+  let uniqueFSAs = new Set();
+  
+  if (fsaCodes.length > 0) {
+    // 如果有 FSA 数据，直接使用
+    totalFSAs = fsaCodes.length;
+    fsaCodes.forEach(fsa => uniqueFSAs.add(fsa));
+  } else if (postalCodes.length > 0) {
+    // 如果只有邮编数据，从邮编提取 FSA
+    postalCodes.forEach(code => {
+      if (typeof code === 'string' && code.length >= 3) {
+        const fsa = code.substring(0, 3).toUpperCase();
+        uniqueFSAs.add(fsa);
+      }
+    });
+    totalFSAs = uniqueFSAs.size;
+  }
+
+  const isActive = config.isActive || config.is_active;
 
   return {
-    totalFSAs: uniqueFSAs.size,
-    activeFSAs: config.isActive ? uniqueFSAs.size : 0,
+    totalFSAs: totalFSAs,
+    activeFSAs: isActive ? totalFSAs : 0,
     totalPostalCodes: postalCodes.length,
     totalPrice,
     activeWeightRanges: activeWeightRanges.length
@@ -310,41 +377,50 @@ export const getRegionStats = (regionId) => {
 };
 
 /**
- * 获取所有区域的存储统计信息
- * @returns {Object} 存储统计信息
+ * 获取所有区域的存储统计信息（异步版本）
+ * @param {boolean} forceRefresh - 是否强制刷新
+ * @returns {Promise<Object>} 存储统计信息
  */
-export const getStorageStats = () => {
-  const allConfigs = getAllRegionConfigs();
+export const getStorageStats = async (forceRefresh = false) => {
+  const allConfigs = await getAllRegionConfigs(forceRefresh);
   const regionIds = Object.keys(allConfigs);
   
-  let totalPostalCodes = 0;
+  let totalFSAs = 0;
   let activeRegions = 0;
   const allAssignedFSAs = new Set();
 
   regionIds.forEach(regionId => {
     const config = allConfigs[regionId];
     if (config) {
-      const postalCodes = config.postalCodes || [];
-      totalPostalCodes += postalCodes.length;
+      // 优先使用 fsaCodes（Supabase 格式），其次使用 postalCodes
+      const fsaCodes = config.fsaCodes || config.fsa_codes || [];
+      const postalCodes = config.postalCodes || config.postal_codes || [];
       
-      if (config.isActive) {
-        activeRegions++;
+      // 计算FSA数量
+      if (fsaCodes.length > 0) {
+        totalFSAs += fsaCodes.length;
+        fsaCodes.forEach(fsa => allAssignedFSAs.add(fsa));
+      } else if (postalCodes.length > 0) {
+        // 如果没有FSA，从邮编中提取
+        postalCodes.forEach(code => {
+          if (typeof code === 'string' && code.length >= 3) {
+            const fsa = code.substring(0, 3).toUpperCase();
+            allAssignedFSAs.add(fsa);
+          }
+        });
+        totalFSAs += allAssignedFSAs.size;
       }
       
-      // 提取并收集唯一的FSA
-      postalCodes.forEach(code => {
-        if (typeof code === 'string' && code.length >= 3) {
-          const fsa = code.substring(0, 3).toUpperCase();
-          allAssignedFSAs.add(fsa);
-        }
-      });
+      if (config.isActive || config.is_active) {
+        activeRegions++;
+      }
     }
   });
 
   return {
     regionCount: regionIds.length,
     activeRegions,
-    totalFSAs: totalPostalCodes,  // 总邮编数
+    totalFSAs,  // 总FSA数
     assignedFSAs: allAssignedFSAs.size,  // 已分配的唯一FSA数量
     unassignedFSAs: 0 // 在统一架构中，所有FSA都分配给区域
   };

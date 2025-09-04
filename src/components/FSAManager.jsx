@@ -29,23 +29,34 @@ import {
 
 // 导入用户真实数据
 import { deliverableFSAs, getFSAsByProvince } from '../data/deliverableFSA.js';
+import { regionService, isSupabaseConfigured } from '../services/supabaseClient';
+import { getAllRegionConfigs } from '../utils/unifiedStorage';
 
-// 增强的FSA存储管理器
+// 增强的FSA存储管理器 - 使用 Supabase
 class EnhancedFSAStorageManager {
   constructor() {
-    this.storageKey = 'deliverable_fsa_list';
+    this.fsaList = [];
     this.loadFromStorage();
   }
 
-  loadFromStorage() {
+  async loadFromStorage() {
     try {
-      const stored = localStorage.getItem(this.storageKey);
-      if (stored) {
-        this.fsaList = JSON.parse(stored);
+      if (isSupabaseConfigured()) {
+        // 从 Supabase 加载所有区域的 FSA
+        console.log('🌐 从 Supabase 加载 FSA 数据...');
+        const regions = await getAllRegionConfigs(true);
+        const allFSAs = new Set();
+        
+        Object.values(regions).forEach(region => {
+          const fsaCodes = region.fsaCodes || region.fsa_codes || [];
+          fsaCodes.forEach(fsa => allFSAs.add(fsa));
+        });
+        
+        this.fsaList = Array.from(allFSAs).sort();
+        console.log('✅ 加载', this.fsaList.length, '个 FSA');
       } else {
-        // 使用用户实际的806个FSA数据
+        // 使用默认数据
         this.fsaList = [...deliverableFSAs];
-        this.saveToStorage();
       }
     } catch (error) {
       console.error('加载FSA数据失败:', error);
@@ -53,9 +64,10 @@ class EnhancedFSAStorageManager {
     }
   }
 
-  saveToStorage() {
+  async saveToStorage() {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.fsaList));
+      // FSA 数据现在由区域管理，不直接保存
+      console.log('⚠️ FSA 数据已通过区域管理保存');
       return true;
     } catch (error) {
       console.error('保存FSA数据失败:', error);

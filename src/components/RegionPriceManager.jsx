@@ -70,6 +70,16 @@ const RegionPriceManager = ({
         setApiModeEnabled(false);
         return;
       }
+      
+      // 使用环境配置检查 API 是否可用
+      const { isApiEnabled } = await import('../utils/apiClient');
+      if (!isApiEnabled()) {
+        // API禁用时，不尝试调用API
+        setApiRanges([]);
+        setApiModeEnabled(false);
+        return;
+      }
+      
       try {
         const data = await apiGet(`/regions/${selectedRegion}/weight-ranges`);
         if (cancelled) return;
@@ -84,6 +94,7 @@ const RegionPriceManager = ({
         setApiRanges(mapped);
         setApiModeEnabled(mapped.length > 0);
       } catch (e) {
+        console.log('API不可用，使用本地存储模式');
         setApiRanges([]);
         setApiModeEnabled(false);
       }
@@ -98,7 +109,7 @@ const RegionPriceManager = ({
   const loadRegionConfigs = async () => {
     setIsLoading(true);
     try {
-      const configs = getAllRegionConfigs();
+      const configs = await getAllRegionConfigs(true); // 改为异步调用并强制刷新
       setRegionConfigs(configs);
     } catch (error) {
       console.error('加载区域配置失败:', error);

@@ -12,7 +12,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import {
-  saveRegionConfig
+  saveRegionConfig,
+  getAllRegionConfigs
 } from '../utils/unifiedStorage.js';
 import compatLayer from '../utils/unifiedStorageCompat';
 import {
@@ -46,8 +47,8 @@ const RegionSelector = ({
     try {
       console.log('开始加载区域数据...');
 
-      // 获取区域配置（使用兼容层）
-      const configs = compatLayer.getAllRegionConfigsSync();
+      // 优先从 Supabase 获取区域配置
+      const configs = await getAllRegionConfigs(true); // 强制刷新
       setRegionConfigs(configs);
 
       console.log('区域配置加载完成:', configs);

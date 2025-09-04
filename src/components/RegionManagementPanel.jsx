@@ -18,6 +18,10 @@ import DirectPostalCodeManager from './DirectPostalCodeManager';
 import BatchPriceManager from './BatchPriceManager';
 import compatLayer from '../utils/unifiedStorageCompat';
 import {
+  getAllRegionConfigs,
+  getStorageStats
+} from '../utils/unifiedStorage';
+import {
   getRegionDisplayInfo
 } from '../data/regionManagement.js';
 import { notifyRegionUpdate, notifyGlobalRefresh } from '../utils/dataUpdateNotifier';
@@ -72,9 +76,9 @@ const RegionManagementPanel = ({
     try {
       console.log('开始加载区域管理数据...');
 
-      // 使用兼容层获取数据
-      const regions = compatLayer.getAllRegionConfigsSync();
-      const stats = compatLayer.getStorageStats();
+      // 优先从 Supabase 获取数据
+      const regions = await getAllRegionConfigs(true); // 强制刷新
+      const stats = await getStorageStats(true); // 现在也是异步的
 
       console.log('数据加载完成:', { regions, stats });
 

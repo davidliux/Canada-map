@@ -8,7 +8,7 @@
  */
 
 import regionApiService from './regionApiService';
-import { getApiMode } from '../utils/apiClient';
+import { getApiMode, environmentConfig } from '../utils/apiClient';
 
 class StorageService {
   constructor() {
@@ -18,18 +18,34 @@ class StorageService {
     this.syncInterval = null;
     this.listeners = new Set();
     
-    // 根据 API 模式配置选项
-    const apiMode = getApiMode();
+    // 根据环境配置设置选项
     this.config = {
       enableLocalCache: true,
-      enableAutoSync: apiMode !== 'disabled', // 只在 API 可用时启用同步
+      enableAutoSync: environmentConfig.apiEnabled(), // 使用环境配置判断 API 是否可用
       syncIntervalMs: 5000, // 5秒自动同步
       maxRetries: 3,
       retryDelayMs: 1000,
-      apiMode: apiMode // 保存 API 模式
+      apiMode: environmentConfig.apiMode // 使用环境配置的 API 模式
     };
     
-    console.log(`StorageService 初始化 - API 模式: ${apiMode}`);
+    console.log(`StorageService 初始化 - API 模式: ${this.config.apiMode}`);
+    
+    // 监听环境变化
+    window.addEventListener('environment-ready', (event) => {
+      const newMode = event.detail.apiMode;
+      if (newMode !== this.config.apiMode) {
+        console.log(`API 模式变更: ${this.config.apiMode} -> ${newMode}`);
+        this.config.apiMode = newMode;
+        this.config.enableAutoSync = environmentConfig.apiEnabled();
+        
+        // 如果 API 变为可用，尝试同步
+        if (this.config.enableAutoSync && !this.syncInterval) {
+          this.startAutoSync();
+        } else if (!this.config.enableAutoSync && this.syncInterval) {
+          this.stopAutoSync();
+        }
+      }
+    });
     
     // 初始化
     this.init();
