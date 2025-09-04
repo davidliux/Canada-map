@@ -16,8 +16,21 @@ import {
   Trash2
 } from 'lucide-react';
 import { getAllRegionConfigs } from '../utils/unifiedStorage';
-import { validateDataConsistency, runFullRepair } from '../utils/dataRepairTool';
 import { resetSystemData } from '../utils/initializeData';
+
+// 动态导入修复工具（可能不存在于生产环境）
+let validateDataConsistency = () => ({ isConsistent: true, issues: [] });
+let runFullRepair = () => ({ success: false, message: '修复工具在生产环境不可用' });
+
+// 尝试导入修复工具
+if (import.meta.env.DEV) {
+  import('../utils/dataRepairTool').then(module => {
+    validateDataConsistency = module.validateDataConsistency;
+    runFullRepair = module.runFullRepair;
+  }).catch(() => {
+    console.log('数据修复工具未找到，使用默认功能');
+  });
+}
 
 const DataHealthMonitor = ({ onDataChange }) => {
   const [isChecking, setIsChecking] = useState(false);

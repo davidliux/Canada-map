@@ -3,7 +3,10 @@ import { motion } from 'framer-motion';
 import AccurateFSAMap from '../../components/AccurateFSAMap';
 import StatsCard from './components/StatsCard';
 import MapController from '../../components/MapController';
-import DataHealthMonitor from '../../components/DataHealthMonitor';
+// 仅在开发环境导入数据健康监控
+const DataHealthMonitor = import.meta.env.DEV 
+  ? React.lazy(() => import('../../components/DataHealthMonitor'))
+  : null;
 import { 
   Map, 
   MapPin, 
@@ -185,8 +188,12 @@ const Dashboard = () => {
 
         {/* 右侧面板 */}
         <div className="absolute bottom-4 right-4 space-y-4">
-          {/* 数据健康监控 */}
-          <DataHealthMonitor onDataChange={() => loadStats()} />
+          {/* 数据健康监控 - 仅在开发环境显示 */}
+          {DataHealthMonitor && (
+            <React.Suspense fallback={<div />}>
+              <DataHealthMonitor onDataChange={() => loadStats()} />
+            </React.Suspense>
+          )}
           
           {/* 地图图例 */}
           <motion.div
