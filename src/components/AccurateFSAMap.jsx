@@ -213,10 +213,17 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
           // 没有选中区域时，恢复到加拿大全景
           console.log('🌍 清除选择，恢复到加拿大全景');
           // 使用标准加拿大全景视图，与初始状态保持一致
-          if (mapInstance && mapInstance.setView) {
-            mapInstance.setView([56.1304, -106.3468], 4, { animate: true, duration: 0.8 });
+          if (mapInstance && mapInstance.setView && mapInstance._container) {
+            try {
+              mapInstance.setView([56.1304, -106.3468], 4, { animate: true, duration: 0.8 });
+              console.log('✅ 已恢复到加拿大全景 - 中心点: [56.1304, -106.3468], 缩放级别: 4');
+            } catch (e) {
+              console.warn('地图视图设置失败，尝试使用flyTo:', e);
+              if (mapInstance.flyTo) {
+                mapInstance.flyTo([56.1304, -106.3468], 4, { duration: 0.8 });
+              }
+            }
           }
-          console.log('✅ 已恢复到加拿大全景 - 中心点: [56.1304, -106.3468], 缩放级别: 4');
         }
       } catch (error) {
         console.error('❌ 地图操作出错:', error);
@@ -652,7 +659,16 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         
         if (targetProvince === 'all') {
           const bounds = getProvinceBounds('all');
-          map.setView(bounds.center, bounds.zoom, { animate: true });
+          if (map && map.setView && map._container) {
+            try {
+              map.setView(bounds.center, bounds.zoom, { animate: true });
+            } catch (e) {
+              console.warn('地图视图设置失败:', e);
+              if (map.flyTo) {
+                map.flyTo(bounds.center, bounds.zoom, { duration: 0.8 });
+              }
+            }
+          }
         } else {
           try {
             const group = new L.featureGroup();
@@ -661,19 +677,33 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
               group.addLayer(layer);
             });
             
-            if (group.getLayers().length > 0) {
-              map.fitBounds(group.getBounds(), { 
-                padding: [10, 10], // 减少边距以获得更大填充
-                maxZoom: 11 // 提高最大缩放级别
-              });
-            } else {
+            if (group.getLayers().length > 0 && map && map.fitBounds && map._container) {
+              try {
+                map.fitBounds(group.getBounds(), { 
+                  padding: [10, 10], // 减少边距以获得更大填充
+                  maxZoom: 11 // 提高最大缩放级别
+                });
+              } catch (e) {
+                console.warn('地图fitBounds失败:', e);
+              }
+            } else if (map && map.setView && map._container) {
               const bounds = getProvinceBounds(targetProvince);
-              map.setView(bounds.center, bounds.zoom, { animate: true });
+              try {
+                map.setView(bounds.center, bounds.zoom, { animate: true });
+              } catch (e) {
+                console.warn('地图setView失败:', e);
+              }
             }
           } catch (error) {
             console.warn('省份聚焦失败，使用预设位置:', error);
-            const bounds = getProvinceBounds(targetProvince);
-            map.setView(bounds.center, bounds.zoom, { animate: true });
+            if (map && map.setView && map._container) {
+              const bounds = getProvinceBounds(targetProvince);
+              try {
+                map.setView(bounds.center, bounds.zoom, { animate: true });
+              } catch (e) {
+                console.error('地图视图设置完全失败:', e);
+              }
+            }
           }
         }
       }, 300);
