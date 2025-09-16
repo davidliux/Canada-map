@@ -1,6 +1,3 @@
-// Prisma Schema for Canada Postal Delivery System
-// PostgreSQL Database Schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,32 +7,499 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 用户表
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  username     String    @unique @db.VarChar(50)
-  email        String    @unique @db.VarChar(255)
-  passwordHash String    @map("password_hash") @db.VarChar(255)
-  fullName     String?   @map("full_name") @db.VarChar(100)
-  role         UserRole  @default(USER)
-  isActive     Boolean   @default(true) @map("is_active")
-  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-
-  // 关联关系
-  createdRegions    DeliveryRegion[] @relation("RegionCreatedBy")
-  createdPostalCodes PostalCode[]    @relation("PostalCodeCreatedBy")
-  createdWeightRanges WeightRange[]  @relation("WeightRangeCreatedBy")
-  createdConfigs    SystemConfig[]   @relation("ConfigCreatedBy")
-  auditLogs         AuditLog[]
-  apiTokens         ApiToken[]
-  createdVersions   DataVersion[]    @relation("VersionCreatedBy")
+  id                    String                  @id @default(uuid()) @db.Uuid
+  username              String                  @unique @db.VarChar(50)
+  email                 String                  @unique @db.VarChar(255)
+  passwordHash          String                  @map("password_hash") @db.VarChar(255)
+  fullName              String?                 @map("full_name") @db.VarChar(100)
+  role                  UserRole                @default(USER)
+  isActive              Boolean                 @default(true) @map("is_active")
+  lastLoginAt           DateTime?               @map("last_login_at") @db.Timestamptz(6)
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  apiTokens             ApiToken[]
+  auditLogs             AuditLog[]
+  createdVersions       DataVersion[]           @relation("VersionCreatedBy")
+  createdRegions        DeliveryRegion[]        @relation("RegionCreatedBy")
+  createdPostalCodes    PostalCode[]            @relation("PostalCodeCreatedBy")
+  createdConfigVersions ProviderConfigVersion[] @relation("ConfigVersionCreatedBy")
+  createdPricingModels  ProviderPricingModel[]  @relation("PricingModelCreatedBy")
+  createdProviders      Provider[]              @relation("ProviderCreatedBy")
+  createdConfigs        SystemConfig[]          @relation("ConfigCreatedBy")
+  priceAuditEntries     TruckPriceAudit[]       @relation("TruckPriceAuditUser")
+  createdPricingRules   TruckPricingRule[]      @relation("TruckPricingRuleCreatedBy")
+  createdWeightRanges   WeightRange[]           @relation("WeightRangeCreatedBy")
 
   @@map("users")
 }
 
-// 用户角色枚举
+model DeliveryRegion {
+  id           String        @id @db.VarChar(10)
+  name         String        @db.VarChar(100)
+  description  String?
+  isActive     Boolean       @default(true) @map("is_active")
+  displayOrder Int           @default(0) @map("display_order")
+  colorCode    String?       @map("color_code") @db.VarChar(7)
+  createdBy    String?       @map("created_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creator      User?         @relation("RegionCreatedBy", fields: [createdBy], references: [id])
+  postalCodes  PostalCode[]
+  weightRanges WeightRange[]
+
+  @@map("delivery_regions")
+}
+
+model PostalCode {
+  id        String         @id @default(uuid()) @db.Uuid
+  regionId  String         @map("region_id") @db.VarChar(10)
+  fsaCode   String         @map("fsa_code") @db.VarChar(3)
+  province  String?        @db.VarChar(2)
+  city      String?        @db.VarChar(100)
+  isActive  Boolean        @default(true) @map("is_active")
+  createdBy String?        @map("created_by") @db.Uuid
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creator   User?          @relation("PostalCodeCreatedBy", fields: [createdBy], references: [id])
+  region    DeliveryRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@unique([regionId, fsaCode])
+  @@map("postal_codes")
+}
+
+model WeightRange {
+  id           String         @id @default(uuid()) @db.Uuid
+  regionId     String         @map("region_id") @db.VarChar(10)
+  rangeName    String         @map("range_name") @db.VarChar(100)
+  minWeight    Decimal        @map("min_weight") @db.Decimal(8, 3)
+  maxWeight    Decimal        @map("max_weight") @db.Decimal(8, 3)
+  price        Decimal        @default(0) @db.Decimal(10, 2)
+  isActive     Boolean        @default(true) @map("is_active")
+  displayOrder Int            @default(0) @map("display_order")
+  createdBy    String?        @map("created_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creator      User?          @relation("WeightRangeCreatedBy", fields: [createdBy], references: [id])
+  region       DeliveryRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@map("weight_ranges")
+}
+
+model SystemConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  configKey   String   @unique @map("config_key") @db.VarChar(100)
+  configValue Json     @map("config_value")
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creator     User?    @relation("ConfigCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("system_configs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  tableName String?  @map("table_name") @db.VarChar(50)
+  recordId  String?  @map("record_id") @db.VarChar(50)
+  oldValues Json?    @map("old_values")
+  newValues Json?    @map("new_values")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model DataVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  versionNumber String   @map("version_number") @db.VarChar(20)
+  description   String?
+  dataSnapshot  Json     @map("data_snapshot")
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  creator       User?    @relation("VersionCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("data_versions")
+}
+
+model ApiToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenName   String    @map("token_name") @db.VarChar(100)
+  tokenHash   String    @map("token_hash") @db.VarChar(255)
+  permissions Json      @default("[]")
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz(6)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_tokens")
+}
+
+model TruckPricingRule {
+  id              String            @id @default(uuid()) @db.Uuid
+  regionId        String            @map("region_id") @db.VarChar(50)
+  name            String            @db.VarChar(255)
+  isActive        Boolean           @default(true) @map("is_active")
+  baseConfig      Json              @map("base_config")
+  incrementConfig Json              @map("increment_config")
+  vehicleConfig   Json              @map("vehicle_config")
+  currency        String            @default("CAD") @db.VarChar(3)
+  createdBy       String?           @map("created_by") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version         Int               @default(1)
+  auditLogs       TruckPriceAudit[]
+  priceTiers      TruckPriceTier[]
+  creator         User?             @relation("TruckPricingRuleCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([regionId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([isActive], map: "idx_pricing_rules_active")
+  @@index([createdAt], map: "idx_pricing_rules_created_at")
+  @@index([regionId], map: "idx_pricing_rules_region")
+  @@map("truck_pricing_rules")
+}
+
+model TruckPriceTier {
+  id             String           @id @default(uuid()) @db.Uuid
+  ruleId         String           @map("rule_id") @db.Uuid
+  plateStart     Int              @map("plate_start")
+  plateEnd       Int              @map("plate_end")
+  basePrice      Decimal          @map("base_price") @db.Decimal(10, 2)
+  incrementType  String?          @map("increment_type") @db.VarChar(20)
+  incrementValue Decimal?         @map("increment_value") @db.Decimal(10, 4)
+  sortOrder      Int              @map("sort_order")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  rule           TruckPricingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, sortOrder])
+  @@index([ruleId])
+  @@index([plateStart, plateEnd])
+  @@index([ruleId], map: "idx_price_tiers_rule")
+  @@index([sortOrder], map: "idx_price_tiers_sort")
+  @@map("truck_price_tiers")
+}
+
+model TruckPriceAudit {
+  id        String           @id @default(uuid()) @db.Uuid
+  ruleId    String           @map("rule_id") @db.Uuid
+  userId    String?          @map("user_id") @db.Uuid
+  action    String           @db.VarChar(50)
+  oldValue  Json?            @map("old_value")
+  newValue  Json?            @map("new_value")
+  ipAddress String?          @map("ip_address") @db.VarChar(45)
+  userAgent String?          @map("user_agent")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  rule      TruckPricingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user      User?            @relation("TruckPriceAuditUser", fields: [userId], references: [id])
+
+  @@index([ruleId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@index([action], map: "idx_price_audit_action")
+  @@index([createdAt], map: "idx_price_audit_created")
+  @@index([ruleId], map: "idx_price_audit_rule")
+  @@index([userId], map: "idx_price_audit_user")
+  @@map("truck_price_audit")
+}
+
+model Provider {
+  id             String                  @id @default(uuid()) @db.Uuid
+  code           String                  @unique @db.VarChar(20)
+  name           String                  @db.VarChar(100)
+  type           ProviderType            @default(EXPRESS)
+  status         ProviderStatus          @default(PENDING)
+  description    String?
+  contactInfo    Json                    @map("contact_info")
+  capabilities   Json                    @default("[]")
+  businessRules  Json                    @default("{}") @map("business_rules")
+  integration    Json                    @default("{}")
+  priority       Int                     @default(100)
+  isActive       Boolean                 @default(true) @map("is_active")
+  createdBy      String?                 @map("created_by") @db.Uuid
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                     @default(1)
+  configVersions ProviderConfigVersion[]
+  pricingModels  ProviderPricingModel[]
+  quotes         ProviderQuote[]
+  serviceAreas   ProviderServiceArea[]
+  surcharges     ProviderSurcharge[]
+  creator        User?                   @relation("ProviderCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@index([type])
+  @@index([isActive])
+  @@map("providers")
+}
+
+model ProviderServiceArea {
+  id               String   @id @default(uuid()) @db.Uuid
+  providerId       String   @map("provider_id") @db.Uuid
+  zoneId           String   @map("zone_id") @db.VarChar(50)
+  zoneName         String   @map("zone_name") @db.VarChar(100)
+  regions          Json     @default("[]")
+  fsaCodes         Json     @default("[]") @map("fsa_codes")
+  postalCodeRanges Json     @default("[]") @map("postal_code_ranges")
+  cities           Json     @default("[]")
+  priority         Int      @default(100)
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  provider         Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, zoneId])
+  @@index([providerId])
+  @@index([isActive])
+  @@map("provider_service_areas")
+}
+
+model ProviderPricingModel {
+  id            String      @id @default(uuid()) @db.Uuid
+  providerId    String      @map("provider_id") @db.Uuid
+  name          String      @db.VarChar(100)
+  type          PricingType
+  unit          PricingUnit @default(PLATE)
+  configuration Json
+  zones         Json        @default("[]")
+  effectiveDate DateTime    @map("effective_date") @db.Date
+  expiryDate    DateTime?   @map("expiry_date") @db.Date
+  priority      Int         @default(100)
+  isActive      Boolean     @default(true) @map("is_active")
+  version       Int         @default(1)
+  createdBy     String?     @map("created_by") @db.Uuid
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creator       User?       @relation("PricingModelCreatedBy", fields: [createdBy], references: [id])
+  provider      Provider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([type])
+  @@index([isActive])
+  @@index([effectiveDate, expiryDate])
+  @@map("provider_pricing_models")
+}
+
+model SkidPricing {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cityId    String    @map("city_id") @db.VarChar(50)
+  zoneId    String    @map("zone_id") @db.VarChar(50)
+  skidCount Int       @map("skid_count")
+  price     Decimal   @map("price") @db.Decimal(10, 2)
+  currency  String?   @default("CAD") @db.VarChar(3)
+  isActive  Boolean?  @default(true) @map("is_active")
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.VarChar(100)
+
+  @@unique([cityId, zoneId, skidCount])
+  @@index([isActive], map: "idx_skid_pricing_active")
+  @@index([cityId], map: "idx_skid_pricing_city")
+  @@index([zoneId], map: "idx_skid_pricing_zone")
+  @@map("skid_pricing")
+}
+
+model ProviderSurcharge {
+  id            String          @id @default(uuid()) @db.Uuid
+  providerId    String          @map("provider_id") @db.Uuid
+  code          String          @db.VarChar(50)
+  name          String          @db.VarChar(100)
+  description   String?
+  type          SurchargeType
+  calculation   CalculationType @default(FIXED)
+  value         Decimal         @db.Decimal(10, 4)
+  conditions    Json            @default("[]")
+  stackable     Boolean         @default(true)
+  priority      Int             @default(100)
+  effectiveDate DateTime        @map("effective_date") @db.Date
+  expiryDate    DateTime?       @map("expiry_date") @db.Date
+  isActive      Boolean         @default(true) @map("is_active")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  provider      Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, code])
+  @@index([providerId])
+  @@index([type])
+  @@index([isActive])
+  @@map("provider_surcharges")
+}
+
+model ProviderQuote {
+  id               String   @id @default(uuid()) @db.Uuid
+  providerId       String   @map("provider_id") @db.Uuid
+  quoteNumber      String   @unique @map("quote_number") @db.VarChar(50)
+  origin           Json
+  destination      Json
+  items            Json
+  basePrice        Decimal  @map("base_price") @db.Decimal(10, 2)
+  surcharges       Json     @default("{}")
+  totalPrice       Decimal  @map("total_price") @db.Decimal(10, 2)
+  currency         String   @default("CAD") @db.VarChar(3)
+  pricingModelUsed String?  @map("pricing_model_used") @db.Uuid
+  breakdown        Json
+  validUntil       DateTime @map("valid_until") @db.Timestamptz(6)
+  status           String   @default("PENDING") @db.VarChar(20)
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  provider         Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+  @@index([quoteNumber])
+  @@index([createdAt])
+  @@index([status])
+  @@map("provider_quotes")
+}
+
+model ProviderConfigVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  providerId String   @map("provider_id") @db.Uuid
+  version    Int
+  configType String   @map("config_type") @db.VarChar(50)
+  configData Json     @map("config_data")
+  changeLog  String?  @map("change_log")
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  creator    User?    @relation("ConfigVersionCreatedBy", fields: [createdBy], references: [id])
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, configType, version])
+  @@index([providerId])
+  @@index([configType])
+  @@index([createdAt])
+  @@map("provider_config_versions")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model truck_delivery_cities {
+  id                     String                   @id @db.VarChar(50)
+  name                   String                   @db.VarChar(100)
+  province               String                   @db.VarChar(2)
+  theme_color            String                   @db.VarChar(7)
+  is_active              Boolean?                 @default(true)
+  created_at             DateTime?                @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime?                @default(now()) @db.Timestamptz(6)
+  version                Int?                     @default(1)
+  metadata               Json?                    @default("{}")
+  center_lat             Decimal?                 @db.Decimal(10, 6)
+  center_lng             Decimal?                 @db.Decimal(10, 6)
+  total_regions          Int?                     @default(0)
+  total_fsas             Int?                     @default(0)
+  truck_delivery_regions truck_delivery_regions[]
+
+  @@index([is_active], map: "idx_truck_cities_active")
+  @@index([province], map: "idx_truck_cities_province")
+}
+
+model truck_delivery_fsa {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  region_id              String                 @db.VarChar(50)
+  fsa_code               String                 @db.VarChar(3)
+  created_at             DateTime?              @default(now()) @db.Timestamptz(6)
+  truck_delivery_regions truck_delivery_regions @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([region_id, fsa_code])
+  @@index([fsa_code], map: "idx_truck_fsa_code")
+  @@index([region_id], map: "idx_truck_fsa_region")
+}
+
+model truck_delivery_fsa_index {
+  fsa_code   String    @id @db.VarChar(3)
+  city_id    String    @db.VarChar(50)
+  region_id  String    @db.VarChar(50)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([city_id], map: "idx_truck_fsa_index_city")
+}
+
+model truck_delivery_orders {
+  id           Int       @id @default(autoincrement())
+  order_number String?   @db.VarChar(50)
+  status       String?   @db.VarChar(50)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model truck_delivery_price_ranges {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  price_id              String                @db.Uuid
+  range_id              String                @db.VarChar(20)
+  min_weight            Decimal               @db.Decimal(8, 2)
+  max_weight            Decimal               @db.Decimal(8, 2)
+  label                 String                @db.VarChar(50)
+  price                 Decimal               @db.Decimal(10, 2)
+  is_active             Boolean?              @default(true)
+  created_at            DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?             @default(now()) @db.Timestamptz(6)
+  truck_delivery_prices truck_delivery_prices @relation(fields: [price_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([price_id, range_id])
+  @@index([is_active], map: "idx_truck_price_ranges_active")
+  @@index([price_id], map: "idx_truck_price_ranges_price")
+}
+
+model truck_delivery_prices {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  region_id                   String                        @unique @db.VarChar(50)
+  currency                    String?                       @default("CAD") @db.VarChar(3)
+  effective_date              DateTime?                     @db.Date
+  expiry_date                 DateTime?                     @db.Date
+  created_at                  DateTime?                     @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime?                     @default(now()) @db.Timestamptz(6)
+  truck_delivery_price_ranges truck_delivery_price_ranges[]
+  truck_delivery_regions      truck_delivery_regions        @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([region_id], map: "idx_truck_prices_region")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model truck_delivery_regions {
+  id                    String                 @id @db.VarChar(50)
+  city_id               String                 @db.VarChar(50)
+  level                 Int
+  name                  String                 @db.VarChar(100)
+  display_color         String?                @db.VarChar(7)
+  is_active             Boolean?               @default(true)
+  created_at            DateTime?              @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?              @default(now()) @db.Timestamptz(6)
+  version               Int?                   @default(1)
+  active_drivers        Int?                   @default(0)
+  daily_capacity        Int?                   @default(0)
+  fsa_codes             String[]               @default([])
+  boundaries            Json?
+  coverage_area         Decimal?               @db.Decimal(10, 2)
+  coverage_population   Int?
+  avg_delivery_time     Int?
+  metadata              Json?                  @default("{}")
+  color                 String?                @db.VarChar(7)
+  truck_delivery_fsa    truck_delivery_fsa[]
+  truck_delivery_prices truck_delivery_prices?
+  truck_delivery_cities truck_delivery_cities  @relation(fields: [city_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([city_id, level])
+  @@index([is_active], map: "idx_truck_regions_active")
+  @@index([city_id], map: "idx_truck_regions_city")
+}
+
+model truck_zone_prices {
+  id         Int       @id @default(autoincrement())
+  zone_id    String?   @db.VarChar(50)
+  min_weight Decimal?  @db.Decimal(10, 2)
+  max_weight Decimal?  @db.Decimal(10, 2)
+  price      Decimal?  @db.Decimal(10, 2)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+}
+
 enum UserRole {
   ADMIN
   MANAGER
@@ -44,132 +508,66 @@ enum UserRole {
   @@map("user_role")
 }
 
-// 配送区域表
-model DeliveryRegion {
-  id           String  @id @db.VarChar(10)
-  name         String  @db.VarChar(100)
-  description  String?
-  isActive     Boolean @default(true) @map("is_active")
-  displayOrder Int     @default(0) @map("display_order")
-  colorCode    String? @map("color_code") @db.VarChar(7)
-  createdBy    String? @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+enum ProviderType {
+  EXPRESS
+  FREIGHT
+  DEDICATED
+  LTL
+  FTL
+  CUSTOM
 
-  // 关联关系
-  creator      User?         @relation("RegionCreatedBy", fields: [createdBy], references: [id])
-  postalCodes  PostalCode[]
-  weightRanges WeightRange[]
-
-  @@map("delivery_regions")
+  @@map("provider_type")
 }
 
-// 邮编表（FSA - Forward Sortation Area）
-model PostalCode {
-  id        String  @id @default(uuid()) @db.Uuid
-  regionId  String  @map("region_id") @db.VarChar(10)
-  fsaCode   String  @map("fsa_code") @db.VarChar(3)
-  province  String? @db.VarChar(2)
-  city      String? @db.VarChar(100)
-  isActive  Boolean @default(true) @map("is_active")
-  createdBy String? @map("created_by") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+enum ProviderStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 
-  // 关联关系
-  region  DeliveryRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
-  creator User?          @relation("PostalCodeCreatedBy", fields: [createdBy], references: [id])
-
-  @@unique([regionId, fsaCode])
-  @@map("postal_codes")
+  @@map("provider_status")
 }
 
-// 重量区间表
-model WeightRange {
-  id           String  @id @default(uuid()) @db.Uuid
-  regionId     String  @map("region_id") @db.VarChar(10)
-  rangeName    String  @map("range_name") @db.VarChar(100)
-  minWeight    Decimal @map("min_weight") @db.Decimal(8, 3)
-  maxWeight    Decimal @map("max_weight") @db.Decimal(8, 3)
-  price        Decimal @default(0) @db.Decimal(10, 2)
-  isActive     Boolean @default(true) @map("is_active")
-  displayOrder Int     @default(0) @map("display_order")
-  createdBy    String? @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+enum PricingType {
+  WEIGHT_ZONE
+  FIRST_CONT
+  FIXED_TABLE
+  LINEAR
+  TIERED
+  CUSTOM
 
-  // 关联关系
-  region  DeliveryRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
-  creator User?          @relation("WeightRangeCreatedBy", fields: [createdBy], references: [id])
-
-  @@map("weight_ranges")
+  @@map("pricing_type")
 }
 
-// 系统配置表
-model SystemConfig {
-  id          String   @id @default(uuid()) @db.Uuid
-  configKey   String   @unique @map("config_key") @db.VarChar(100)
-  configValue Json     @map("config_value")
-  description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdBy   String?  @map("created_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+enum PricingUnit {
+  SKID
+  PALLET
+  PLATE
+  KG
+  LBS
+  PIECE
+  CUSTOM
 
-  // 关联关系
-  creator User? @relation("ConfigCreatedBy", fields: [createdBy], references: [id])
-
-  @@map("system_configs")
+  @@map("pricing_unit")
 }
 
-// 操作日志表（审计）
-model AuditLog {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String?   @map("user_id") @db.Uuid
-  action     String    @db.VarChar(50)
-  tableName  String?   @map("table_name") @db.VarChar(50)
-  recordId   String?   @map("record_id") @db.VarChar(50)
-  oldValues  Json?     @map("old_values")
-  newValues  Json?     @map("new_values")
-  ipAddress  String?   @map("ip_address")
-  userAgent  String?   @map("user_agent")
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+enum SurchargeType {
+  RESIDENTIAL
+  LIFTGATE
+  INSIDE_DELIVERY
+  APPOINTMENT
+  DANGEROUS_GOODS
+  RUSH
+  FUEL
+  CUSTOM
 
-  // 关联关系
-  user User? @relation(fields: [userId], references: [id])
-
-  @@map("audit_logs")
+  @@map("surcharge_type")
 }
 
-// 数据版本表
-model DataVersion {
-  id           String   @id @default(uuid()) @db.Uuid
-  versionNumber String  @map("version_number") @db.VarChar(20)
-  description  String?
-  dataSnapshot Json     @map("data_snapshot")
-  createdBy    String?  @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+enum CalculationType {
+  FIXED
+  PERCENTAGE
+  PER_UNIT
 
-  // 关联关系
-  creator User? @relation("VersionCreatedBy", fields: [createdBy], references: [id])
-
-  @@map("data_versions")
-}
-
-// API访问令牌表
-model ApiToken {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  tokenName   String    @map("token_name") @db.VarChar(100)
-  tokenHash   String    @map("token_hash") @db.VarChar(255)
-  permissions Json      @default("[]")
-  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
-  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-
-  // 关联关系
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("api_tokens")
+  @@map("calculation_type")
 }

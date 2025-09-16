@@ -20,7 +20,17 @@ class RegionApiService {
    */
   async getAllRegions(includeInactive = false, includeStats = false) {
     try {
-      const regions = await apiGet(API_BASE, { includeInactive, includeStats });
+      const params = {};
+      if (includeInactive) params.include_inactive = 'true';
+      if (includeStats) params.include_stats = 'true';
+
+      const regions = await apiGet(API_BASE, params);
+
+      // 如果返回的是空数组，返回空对象
+      if (!regions || regions.length === 0) {
+        return {};
+      }
+
       // 转换为前端期望的格式 { regionId: regionData }
       return regions.reduce((acc, region) => {
         acc[region.id] = {

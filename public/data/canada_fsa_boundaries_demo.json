@@ -1,0 +1,203 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "M5V",
+        "PRNAME": "Ontario",
+        "PRUID": "35"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-79.395, 43.635],
+          [-79.385, 43.635],
+          [-79.385, 43.645],
+          [-79.395, 43.645],
+          [-79.395, 43.635]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "M5G",
+        "PRNAME": "Ontario",
+        "PRUID": "35"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-79.385, 43.645],
+          [-79.375, 43.645],
+          [-79.375, 43.655],
+          [-79.385, 43.655],
+          [-79.385, 43.645]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "M4E",
+        "PRNAME": "Ontario",
+        "PRUID": "35"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-79.375, 43.655],
+          [-79.365, 43.655],
+          [-79.365, 43.665],
+          [-79.375, 43.665],
+          [-79.375, 43.655]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "V6B",
+        "PRNAME": "British Columbia",
+        "PRUID": "59"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-123.125, 49.275],
+          [-123.115, 49.275],
+          [-123.115, 49.285],
+          [-123.125, 49.285],
+          [-123.125, 49.275]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "V6C",
+        "PRNAME": "British Columbia",
+        "PRUID": "59"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-123.115, 49.285],
+          [-123.105, 49.285],
+          [-123.105, 49.295],
+          [-123.115, 49.295],
+          [-123.115, 49.285]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "H3B",
+        "PRNAME": "Quebec",
+        "PRUID": "24"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-73.575, 45.495],
+          [-73.565, 45.495],
+          [-73.565, 45.505],
+          [-73.575, 45.505],
+          [-73.575, 45.495]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "H3C",
+        "PRNAME": "Quebec",
+        "PRUID": "24"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-73.565, 45.505],
+          [-73.555, 45.505],
+          [-73.555, 45.515],
+          [-73.565, 45.515],
+          [-73.565, 45.505]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "T2P",
+        "PRNAME": "Alberta",
+        "PRUID": "48"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-114.08, 51.035],
+          [-114.07, 51.035],
+          [-114.07, 51.045],
+          [-114.08, 51.045],
+          [-114.08, 51.035]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "T2G",
+        "PRNAME": "Alberta",
+        "PRUID": "48"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-114.07, 51.045],
+          [-114.06, 51.045],
+          [-114.06, 51.055],
+          [-114.07, 51.055],
+          [-114.07, 51.045]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "T5H",
+        "PRNAME": "Alberta",
+        "PRUID": "48"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-113.50, 53.535],
+          [-113.49, 53.535],
+          [-113.49, 53.545],
+          [-113.50, 53.545],
+          [-113.50, 53.535]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "CFSAUID": "K1A",
+        "PRNAME": "Ontario",
+        "PRUID": "35"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-75.705, 45.415],
+          [-75.695, 45.415],
+          [-75.695, 45.425],
+          [-75.705, 45.425],
+          [-75.705, 45.415]
+        ]]
+      }
+    }
+  ]
+}

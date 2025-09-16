@@ -5,8 +5,7 @@
  */
 
 import storageService from '../services/storageService';
-import { UNIFIED_STORAGE_KEYS, initializeDefaultRegions, getAllRegionConfigs, saveRegionConfig, getRegionStats as getRegionStatsAsync } from './unifiedStorage';
-import { regionService, isSupabaseConfigured } from '../services/supabaseClient';
+import { UNIFIED_STORAGE_KEYS, initializeDefaultRegions } from './unifiedStorage';
 
 // 本地缓存副本
 let localCache = {};
@@ -17,27 +16,32 @@ let isInitialized = false;
  * 应在应用启动时调用
  */
 export const initCompatLayer = async () => {
-  if (isInitialized) {
-    console.log('兼容层已初始化，跳过');
-    return;
-  }
-  
+  if (isInitialized) return;
+
   try {
-    // 从 Supabase 获取初始数据
-    if (isSupabaseConfigured()) {
-      console.log('🌐 从 Supabase 初始化兼容层...');
-      localCache = await getAllRegionConfigs(true);
-      isInitialized = true;
-      console.log('✅ 兼容层初始化成功，加载', Object.keys(localCache).length, '个区域');
-    } else {
-      console.error('❌ Supabase 未配置');
-      localCache = {}; // 返回空对象而不是创建默认区域
-      isInitialized = true;
-    }
+    console.log('正在从数据库初始化兼容层...');
+    // 强制从数据库获取初始数据
+    localCache = await storageService.getAllRegions(true);
+    isInitialized = true;
+
+    // 订阅数据更新
+    storageService.subscribe((event) => {
+      if (event.event === 'refresh') {
+        localCache = event.data;
+      } else if (event.event === 'update' || event.event === 'postal-update' || event.event === 'price-update') {
+        if (event.data.regionId && event.data.data) {
+          localCache[event.data.regionId] = event.data.data;
+        }
+      }
+    });
+
+    console.log('兼容层初始化成功，从数据库加载了', Object.keys(localCache).length, '个区域');
   } catch (error) {
     console.error('兼容层初始化失败:', error);
-    localCache = {}; // 返回空对象而不是创建默认区域
+    // 不再从localStorage恢复，返回空数据
+    localCache = {};
     isInitialized = true;
+    console.error('无法连接到数据库，系统将以空数据启动');
   }
 };
 
@@ -47,17 +51,14 @@ export const initCompatLayer = async () => {
  */
 export const getAllRegionConfigsSync = () => {
   if (!isInitialized) {
-    console.warn('兼容层未初始化，触发异步初始化');
+    console.warn('兼容层未初始化，请等待数据库加载');
     // 触发异步初始化
     initCompatLayer();
-    return localCache;
+    // 返回空数据，避免使用localStorage
+    return {};
   }
-  
-  // 触发异步刷新以获取最新数据库数据
-  getAllRegionConfigs(false).then(configs => {
-    localCache = configs;
-  }).catch(console.error);
-  
+
+  // 返回缓存的数据库数据
   return { ...localCache };
 };
 
@@ -72,9 +73,9 @@ export const getRegionConfigSync = (regionId) => {
     initCompatLayer();
   }
   
-  // 如果缓存中没有，触发异步从 Supabase 获取
-  if (!localCache[regionId] && isSupabaseConfigured()) {
-    regionService.getRegion(regionId).then(region => {
+  // 如果缓存中没有，触发异步获取
+  if (!localCache[regionId]) {
+    storageService.getRegion(regionId).then(region => {
       if (region) {
         localCache[regionId] = region;
       }
@@ -92,18 +93,26 @@ export const getRegionConfigSync = (regionId) => {
  * @returns {boolean} 总是返回true（乐观更新）
  */
 export const saveRegionConfigSync = (regionId, config) => {
-  // 立即更新本地缓存（乐观更新）
+  // 确保数据格式正确（兼容处理）
+  if (config.fsaCodes && !config.postalCodes) {
+    config.postalCodes = config.fsaCodes;
+  }
+
+  // 立即更新内存缓存（乐观更新）
   localCache[regionId] = {
     ...config,
     lastUpdated: new Date().toISOString()
   };
-  
-  // 触发异步保存到 Supabase
-  saveRegionConfig(regionId, config).catch(error => {
-    console.error('异步保存到 Supabase 失败:', error);
+
+  // 不再保存到localStorage
+  // localStorage已移除
+
+  // 触发异步保存到数据库
+  storageService.updateRegion(regionId, config).catch(error => {
+    console.error('保存到数据库失败:', error);
     // 可以在这里实现重试逻辑
   });
-  
+
   return true;
 };
 
@@ -113,14 +122,17 @@ export const saveRegionConfigSync = (regionId, config) => {
  * @returns {boolean} 总是返回true
  */
 export const saveAllRegionConfigsSync = (regionConfigs) => {
-  // 更新本地缓存
+  // 更新内存缓存
   localCache = { ...regionConfigs };
-  
-  // 触发批量更新到 Supabase
+
+  // 不再保存到localStorage
+  // localStorage已移除
+
+  // 触发批量更新到数据库
   Object.entries(regionConfigs).forEach(([regionId, config]) => {
-    saveRegionConfig(regionId, config).catch(console.error);
+    storageService.updateRegion(regionId, config).catch(console.error);
   });
-  
+
   return true;
 };
 
@@ -182,35 +194,24 @@ export const getRegionStatsSync = (regionId) => {
     };
   }
 
-  // 支持多种字段名（Supabase 和本地存储格式）
-  const fsaCodes = config.fsaCodes || config.fsa_codes || [];
-  const postalCodes = config.postalCodes || config.postal_codes || [];
-  const weightRanges = config.weightRanges || config.weight_ranges || [];
+  const postalCodes = config.postalCodes || [];
+  const weightRanges = config.weightRanges || [];
   const activeWeightRanges = weightRanges.filter(range => range.isActive);
   const totalPrice = activeWeightRanges.reduce((sum, range) => sum + (range.price || 0), 0);
 
-  // 优先使用 FSA 数据
-  let totalFSAs = 0;
-  if (fsaCodes.length > 0) {
-    // 如果有 FSA 数据，直接使用
-    totalFSAs = fsaCodes.length;
-  } else if (postalCodes.length > 0) {
-    // 如果只有邮编数据，从邮编提取 FSA
-    const uniqueFSAs = new Set();
-    postalCodes.forEach(code => {
-      if (typeof code === 'string' && code.length >= 3) {
-        const fsa = code.substring(0, 3).toUpperCase();
-        uniqueFSAs.add(fsa);
-      }
-    });
-    totalFSAs = uniqueFSAs.size;
-  }
-
-  const isActive = config.isActive || config.is_active;
+  // 计算唯一的FSA数量（邮编前3个字符）
+  const uniqueFSAs = new Set();
+  postalCodes.forEach(code => {
+    if (typeof code === 'string' && code.length >= 3) {
+      // 提取FSA（前3个字符）
+      const fsa = code.substring(0, 3).toUpperCase();
+      uniqueFSAs.add(fsa);
+    }
+  });
 
   return {
-    totalFSAs: totalFSAs,
-    activeFSAs: isActive ? totalFSAs : 0,
+    totalFSAs: uniqueFSAs.size,
+    activeFSAs: config.isActive ? uniqueFSAs.size : 0,
     totalPostalCodes: postalCodes.length,
     totalPrice,
     activeWeightRanges: activeWeightRanges.length
@@ -224,8 +225,7 @@ export const getRegionStatsSync = (regionId) => {
  */
 export const getRegionPostalCodesSync = (regionId) => {
   const config = getRegionConfigSync(regionId);
-  // 优先返回 FSA 数据
-  return config ? (config.fsaCodes || config.fsa_codes || config.postalCodes || config.postal_codes || []) : [];
+  return config ? config.postalCodes || [] : [];
 };
 
 /**
@@ -239,21 +239,20 @@ export const setRegionPostalCodesSync = (regionId, postalCodes) => {
     localCache[regionId] = {
       id: regionId,
       name: `区域${regionId}`,
-      fsaCodes: [],
       postalCodes: []
     };
   }
-  
-  // 更新本地缓存 - 保存为 FSA 数据
-  localCache[regionId].fsaCodes = [...postalCodes];
-  localCache[regionId].fsa_codes = [...postalCodes]; // 兼容两种格式
+
+  // 更新内存缓存
+  localCache[regionId].postalCodes = [...postalCodes];
   localCache[regionId].lastUpdated = new Date().toISOString();
-  
-  // 触发异步更新到 Supabase
-  if (isSupabaseConfigured()) {
-    regionService.updateRegionFSAs(regionId, postalCodes).catch(console.error);
-  }
-  
+
+  // 不再保存到localStorage
+  // localStorage已移除
+
+  // 触发异步更新到数据库
+  storageService.updateRegionPostalCodes(regionId, postalCodes).catch(console.error);
+
   return true;
 };
 

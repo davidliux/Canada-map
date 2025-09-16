@@ -12,10 +12,10 @@ import {
   RefreshCw
 } from 'lucide-react';
 import {
-  saveRegionConfig,
-  getAllRegionConfigs
+  saveRegionConfig
 } from '../utils/unifiedStorage.js';
 import compatLayer from '../utils/unifiedStorageCompat';
+import storageService from '../services/storageService';
 import {
   getRegionDisplayInfo
 } from '../data/regionManagement.js';
@@ -45,27 +45,88 @@ const RegionSelector = ({
   const loadRegionData = async () => {
     setIsLoading(true);
     try {
-      console.log('开始加载区域数据...');
+      console.log('开始从数据库加载区域数据...');
 
-      // 优先从 Supabase 获取区域配置
-      const configs = await getAllRegionConfigs(true); // 强制刷新
+      // 使用异步API直接从数据库加载
+      const configs = await storageService.getAllRegions(true); // forceRefresh=true
       setRegionConfigs(configs);
 
-      console.log('区域配置加载完成:', configs);
+      console.log('区域配置从数据库加载完成:', configs);
 
       // 计算每个区域的统计信息
       const stats = {};
       // 为所有8个区域计算统计信息
       for (let i = 1; i <= 8; i++) {
         const regionId = i.toString();
-        const regionStat = compatLayer.getRegionStats(regionId);
-        stats[regionId] = regionStat;
-        console.log(`区域 ${regionId} 统计信息:`, regionStat);
+        const config = configs[regionId];
+        if (config) {
+          const postalCodes = config.postalCodes || [];
+          const weightRanges = config.weightRanges || [];
+          const activeWeightRanges = weightRanges.filter(range => range.isActive);
+          const totalPrice = activeWeightRanges.reduce((sum, range) => sum + (range.price || 0), 0);
+
+          // 计算唯一的FSA数量（邮编前3个字符）
+          const uniqueFSAs = new Set();
+          postalCodes.forEach(code => {
+            if (typeof code === 'string' && code.length >= 3) {
+              const fsa = code.substring(0, 3).toUpperCase();
+              uniqueFSAs.add(fsa);
+            }
+          });
+
+          stats[regionId] = {
+            totalFSAs: uniqueFSAs.size,
+            activeFSAs: config.isActive ? uniqueFSAs.size : 0,
+            totalPostalCodes: postalCodes.length,
+            totalPrice,
+            activeWeightRanges: activeWeightRanges.length
+          };
+        } else {
+          stats[regionId] = {
+            totalFSAs: 0,
+            activeFSAs: 0,
+            totalPostalCodes: 0,
+            totalPrice: 0,
+            activeWeightRanges: 0
+          };
+        }
+        console.log(`区域 ${regionId} 统计信息:`, stats[regionId]);
       }
       setRegionStats(stats);
 
-      // 获取存储统计信息
-      const storage = compatLayer.getStorageStats();
+      // 计算存储统计信息
+      const regionIds = Object.keys(configs);
+      let totalPostalCodes = 0;
+      let activeRegions = 0;
+      const allAssignedFSAs = new Set();
+
+      regionIds.forEach(regionId => {
+        const config = configs[regionId];
+        if (config) {
+          const postalCodes = config.postalCodes || [];
+          totalPostalCodes += postalCodes.length;
+
+          if (config.isActive) {
+            activeRegions++;
+          }
+
+          // 提取并收集唯一的FSA
+          postalCodes.forEach(code => {
+            if (typeof code === 'string' && code.length >= 3) {
+              const fsa = code.substring(0, 3).toUpperCase();
+              allAssignedFSAs.add(fsa);
+            }
+          });
+        }
+      });
+
+      const storage = {
+        regionCount: regionIds.length,
+        activeRegions,
+        totalFSAs: totalPostalCodes,
+        assignedFSAs: allAssignedFSAs.size,
+        unassignedFSAs: 0
+      };
       setStorageStats(storage);
 
       console.log('区域数据加载完成:', { configs, stats, storage });
@@ -91,12 +152,16 @@ const RegionSelector = ({
         lastUpdated: new Date().toISOString()
       };
 
-      const success = saveRegionConfig(regionId, updatedConfig);
+      // 使用await等待异步保存完成
+      const success = await saveRegionConfig(regionId, updatedConfig);
       if (success) {
         setRegionConfigs(prev => ({
           ...prev,
           [regionId]: updatedConfig
         }));
+        console.log(`区域 ${regionId} 状态已更新并保存到数据库`);
+      } else {
+        console.error(`区域 ${regionId} 保存失败`);
       }
     } catch (error) {
       console.error('切换区域状态失败:', error);

@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卡车配送数据迁移工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            color: #444;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-icon.success { background: #4caf50; }
+        .status-icon.warning { background: #ff9800; }
+        .status-icon.error { background: #f44336; }
+        .status-icon.info { background: #2196f3; }
+
+        .data-preview {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .city-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .city-info {
+            flex: 1;
+        }
+
+        .city-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .city-details {
+            color: #666;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .city-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .city-status.migrated {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .city-status.pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .city-status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+        }
+
+        .log-entry.error { color: #f48771; }
+        .log-entry.success { color: #89d185; }
+        .log-entry.warning { color: #dcdcaa; }
+        .log-entry.info { color: #9cdcfe; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚚 卡车配送数据迁移工具</h1>
+        <p class="subtitle">将本地存储的数据迁移到数据库</p>
+
+        <!-- 步骤1: 检查本地数据 -->
+        <div class="section">
+            <h2>
+                <span class="status-icon info"></span>
+                步骤1: 检查本地数据
+            </h2>
+            <div id="localDataInfo"></div>
+            <button class="btn btn-primary" onclick="checkLocalData()">检查本地数据</button>
+        </div>
+
+        <!-- 步骤2: 连接数据库 -->
+        <div class="section">
+            <h2>
+                <span class="status-icon info"></span>
+                步骤2: 测试数据库连接
+            </h2>
+            <div id="dbConnectionInfo"></div>
+            <button class="btn btn-primary" onclick="testDatabaseConnection()">测试连接</button>
+        </div>
+
+        <!-- 步骤3: 数据预览 -->
+        <div class="section">
+            <h2>
+                <span class="status-icon info"></span>
+                步骤3: 数据预览
+            </h2>
+            <div id="dataPreview"></div>
+        </div>
+
+        <!-- 步骤4: 执行迁移 -->
+        <div class="section">
+            <h2>
+                <span class="status-icon info"></span>
+                步骤4: 执行迁移
+            </h2>
+            <div class="progress-bar" style="display: none;" id="progressBar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div id="migrationResult"></div>
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="startMigration()" id="migrateBtn" disabled>
+                    开始迁移
+                </button>
+                <button class="btn btn-danger" onclick="clearLocalData()" disabled id="clearBtn">
+                    清除本地数据
+                </button>
+                <button class="btn btn-secondary" onclick="exportBackup()">
+                    导出备份
+                </button>
+            </div>
+        </div>
+
+        <!-- 日志输出 -->
+        <div class="log-container" id="logContainer">
+            <div class="log-entry info">等待操作...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5050/api/v1';
+        const TRUCK_STORAGE_KEYS = {
+            TRUCK_CITIES: 'truck_delivery_cities',
+            TRUCK_CITY_PREFIX: 'truck_city_',
+            TRUCK_FSA_INDEX: 'truck_fsa_city_index'
+        };
+
+        let localCities = [];
+        let dbConnected = false;
+
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        async function checkLocalData() {
+            try {
+                log('检查本地存储数据...');
+                
+                // 获取城市列表
+                const citiesData = localStorage.getItem(TRUCK_STORAGE_KEYS.TRUCK_CITIES);
+                if (!citiesData) {
+                    log('未找到本地城市数据', 'warning');
+                    document.getElementById('localDataInfo').innerHTML = `
+                        <div class="stat-card">
+                            <div class="stat-value">0</div>
+                            <div class="stat-label">没有找到本地数据</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const cityIds = JSON.parse(citiesData);
+                localCities = [];
+                
+                for (const cityId of cityIds) {
+                    const cityKey = TRUCK_STORAGE_KEYS.TRUCK_CITY_PREFIX + cityId;
+                    const cityData = localStorage.getItem(cityKey);
+                    if (cityData) {
+                        localCities.push(JSON.parse(cityData));
+                    }
+                }
+
+                log(`找到 ${localCities.length} 个城市`, 'success');
+                
+                // 统计信息
+                const totalRegions = localCities.reduce((sum, city) => sum + (city.regions?.length || 0), 0);
+                const totalFSAs = localCities.reduce((sum, city) => 
+                    sum + (city.regions?.reduce((rSum, r) => rSum + (r.fsaCodes?.length || 0), 0) || 0), 0);
+
+                document.getElementById('localDataInfo').innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${localCities.length}</div>
+                            <div class="stat-label">城市</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${totalRegions}</div>
+                            <div class="stat-label">区域</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${totalFSAs}</div>
+                            <div class="stat-label">FSA代码</div>
+                        </div>
+                    </div>
+                `;
+
+                // 显示数据预览
+                showDataPreview();
+                
+                // 启用迁移按钮
+                if (localCities.length > 0) {
+                    document.getElementById('migrateBtn').disabled = false;
+                }
+            } catch (error) {
+                log(`检查本地数据失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDatabaseConnection() {
+            try {
+                log('测试数据库连接...');
+                
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    log('数据库连接成功', 'success');
+                    dbConnected = true;
+                    document.getElementById('dbConnectionInfo').innerHTML = `
+                        <div class="stat-card" style="border-color: #4caf50;">
+                            <div class="stat-value" style="color: #4caf50;">✓</div>
+                            <div class="stat-label">连接成功</div>
+                        </div>
+                    `;
+                } else {
+                    throw new Error('连接失败');
+                }
+            } catch (error) {
+                log(`数据库连接失败: ${error.message}`, 'error');
+                dbConnected = false;
+                document.getElementById('dbConnectionInfo').innerHTML = `
+                    <div class="stat-card" style="border-color: #f44336;">
+                        <div class="stat-value" style="color: #f44336;">✗</div>
+                        <div class="stat-label">连接失败</div>
+                    </div>
+                    <p style="color: #f44336; margin-top: 10px;">
+                        请确保后端服务正在运行 (端口 5050)
+                    </p>
+                `;
+            }
+        }
+
+        function showDataPreview() {
+            const preview = document.getElementById('dataPreview');
+            if (localCities.length === 0) {
+                preview.innerHTML = '<p>没有数据可预览</p>';
+                return;
+            }
+
+            let html = '<div style="max-height: 300px; overflow-y: auto;">';
+            localCities.forEach(city => {
+                const regionCount = city.regions?.length || 0;
+                const fsaCount = city.regions?.reduce((sum, r) => sum + (r.fsaCodes?.length || 0), 0) || 0;
+                
+                html += `
+                    <div class="city-item">
+                        <div class="city-info">
+                            <div class="city-name">${city.name}</div>
+                            <div class="city-details">
+                                ${city.province} • ${regionCount} 个区域 • ${fsaCount} 个FSA
+                            </div>
+                        </div>
+                        <div class="city-status pending">待迁移</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            preview.innerHTML = html;
+        }
+
+        async function startMigration() {
+            if (!dbConnected) {
+                await testDatabaseConnection();
+                if (!dbConnected) {
+                    alert('请先确保数据库连接正常');
+                    return;
+                }
+            }
+
+            if (localCities.length === 0) {
+                alert('没有找到需要迁移的数据');
+                return;
+            }
+
+            if (!confirm(`确定要迁移 ${localCities.length} 个城市到数据库吗？`)) {
+                return;
+            }
+
+            log('开始数据迁移...', 'info');
+            
+            // 显示进度条
+            document.getElementById('progressBar').style.display = 'block';
+            document.getElementById('migrateBtn').disabled = true;
+            
+            try {
+                // 批量迁移
+                const response = await fetch(`${API_BASE}/truck-delivery/import`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ cities: localCities })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    log(`迁移完成: 成功 ${result.data.successCount}/${localCities.length}`, 'success');
+                    
+                    // 更新进度条
+                    const progress = (result.data.successCount / localCities.length) * 100;
+                    document.getElementById('progressFill').style.width = `${progress}%`;
+                    document.getElementById('progressFill').textContent = `${Math.round(progress)}%`;
+                    
+                    // 显示结果
+                    let resultHtml = `
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: #4caf50;">${result.data.successCount}</div>
+                                <div class="stat-label">成功</div>
+                            </div>
+                    `;
+                    
+                    if (result.data.errorCount > 0) {
+                        resultHtml += `
+                            <div class="stat-card">
+                                <div class="stat-value" style="color: #f44336;">${result.data.errorCount}</div>
+                                <div class="stat-label">失败</div>
+                            </div>
+                        `;
+                        
+                        // 显示错误详情
+                        result.data.errors.forEach(error => {
+                            log(`迁移失败 - ${error.cityName}: ${error.error}`, 'error');
+                        });
+                    }
+                    
+                    resultHtml += '</div>';
+                    document.getElementById('migrationResult').innerHTML = resultHtml;
+                    
+                    // 启用清除按钮
+                    if (result.data.successCount > 0) {
+                        document.getElementById('clearBtn').disabled = false;
+                    }
+                } else {
+                    throw new Error(result.error?.message || '迁移失败');
+                }
+            } catch (error) {
+                log(`迁移失败: ${error.message}`, 'error');
+                document.getElementById('migrateBtn').disabled = false;
+            }
+        }
+
+        function clearLocalData() {
+            if (!confirm('确定要清除本地存储的数据吗？这个操作不可恢复！')) {
+                return;
+            }
+
+            try {
+                // 清除城市列表
+                localStorage.removeItem(TRUCK_STORAGE_KEYS.TRUCK_CITIES);
+                
+                // 清除所有城市数据
+                localCities.forEach(city => {
+                    const cityKey = TRUCK_STORAGE_KEYS.TRUCK_CITY_PREFIX + city.id;
+                    localStorage.removeItem(cityKey);
+                });
+                
+                // 清除FSA索引
+                localStorage.removeItem(TRUCK_STORAGE_KEYS.TRUCK_FSA_INDEX);
+                
+                log('本地数据已清除', 'success');
+                
+                // 重置界面
+                localCities = [];
+                checkLocalData();
+                document.getElementById('clearBtn').disabled = true;
+            } catch (error) {
+                log(`清除数据失败: ${error.message}`, 'error');
+            }
+        }
+
+        function exportBackup() {
+            if (localCities.length === 0) {
+                alert('没有数据可导出');
+                return;
+            }
+
+            try {
+                const backup = {
+                    version: '1.0',
+                    timestamp: new Date().toISOString(),
+                    cities: localCities
+                };
+
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `truck-delivery-backup-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                log('备份导出成功', 'success');
+            } catch (error) {
+                log(`导出失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = () => {
+            checkLocalData();
+            testDatabaseConnection();
+        };
+    </script>
+</body>
+</html>

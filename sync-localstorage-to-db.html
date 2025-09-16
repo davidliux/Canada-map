@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>同步localStorage数据到数据库</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #00ff9f;
+            border-bottom: 2px solid #00ff9f;
+            padding-bottom: 10px;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: #333;
+        }
+        .success {
+            background: #1a4d2e;
+            color: #4ade80;
+            border-left: 4px solid #4ade80;
+        }
+        .error {
+            background: #4d1a1a;
+            color: #f87171;
+            border-left: 4px solid #f87171;
+        }
+        .info {
+            background: #1a3d4d;
+            color: #60a5fa;
+            border-left: 4px solid #60a5fa;
+        }
+        .warning {
+            background: #4d3d1a;
+            color: #fbbf24;
+            border-left: 4px solid #fbbf24;
+        }
+        button {
+            background: #00ff9f;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00cc7f;
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            color: #999;
+        }
+        .data-preview {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .region-item {
+            background: #333;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 3px solid #00ff9f;
+        }
+        .progress {
+            width: 100%;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff9f, #00cc7f);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 同步 localStorage 数据到数据库</h1>
+
+        <div id="status"></div>
+
+        <div class="button-group">
+            <button onclick="checkLocalStorage()">📊 检查本地数据</button>
+            <button onclick="checkDatabase()">🗄️ 检查数据库</button>
+            <button onclick="syncToDatabase()" id="syncBtn">🚀 同步到数据库</button>
+            <button onclick="clearDatabase()">⚠️ 清空数据库</button>
+        </div>
+
+        <div id="dataPreview"></div>
+
+        <div class="progress" style="display:none;" id="progressBar">
+            <div class="progress-bar" id="progressBarFill">0%</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5050/api/v1';
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `${new Date().toLocaleTimeString()} - ${message}`;
+            statusDiv.appendChild(div);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+
+        function showProgress(current, total) {
+            const progressBar = document.getElementById('progressBar');
+            const progressBarFill = document.getElementById('progressBarFill');
+
+            if (total > 0) {
+                progressBar.style.display = 'block';
+                const percent = Math.round((current / total) * 100);
+                progressBarFill.style.width = percent + '%';
+                progressBarFill.textContent = `${percent}% (${current}/${total})`;
+            } else {
+                progressBar.style.display = 'none';
+            }
+        }
+
+        async function checkLocalStorage() {
+            showStatus('检查 localStorage 数据...', 'info');
+
+            const dataPreview = document.getElementById('dataPreview');
+            dataPreview.innerHTML = '<h3>本地存储数据：</h3>';
+
+            // 检查多个可能的存储键
+            const storageKeys = [
+                'unified_region_data',
+                'unifiedStorage_regionData',
+                'fsa_configurations',
+                'region_1_postal_codes',
+                'region_2_postal_codes',
+                'region_3_postal_codes',
+                'region_4_postal_codes',
+                'region_5_postal_codes',
+                'region_6_postal_codes',
+                'region_7_postal_codes',
+                'region_8_postal_codes'
+            ];
+
+            let foundData = false;
+            let regionData = {};
+
+            for (const key of storageKeys) {
+                const data = localStorage.getItem(key);
+                if (data) {
+                    showStatus(`找到数据: ${key}`, 'success');
+                    foundData = true;
+
+                    try {
+                        const parsed = JSON.parse(data);
+
+                        if (key === 'unified_region_data' || key === 'unifiedStorage_regionData') {
+                            // 统一格式的数据
+                            regionData = { ...regionData, ...parsed };
+                        } else if (key === 'fsa_configurations') {
+                            // 旧格式的FSA配置
+                            for (const regionId in parsed) {
+                                if (!regionData[regionId]) {
+                                    regionData[regionId] = {
+                                        id: regionId,
+                                        name: parsed[regionId].name || `区域 ${regionId}`,
+                                        fsaCodes: parsed[regionId].fsa || [],
+                                        postalCodes: parsed[regionId].postal_codes || [],
+                                        isActive: parsed[regionId].isActive !== false,
+                                        weightRanges: parsed[regionId].prices || []
+                                    };
+                                }
+                            }
+                        } else if (key.startsWith('region_') && key.endsWith('_postal_codes')) {
+                            // 旧格式的邮编数据
+                            const match = key.match(/region_(\d+)_postal_codes/);
+                            if (match) {
+                                const regionId = match[1];
+                                if (!regionData[regionId]) {
+                                    regionData[regionId] = {
+                                        id: regionId,
+                                        name: `区域 ${regionId}`,
+                                        fsaCodes: [],
+                                        postalCodes: [],
+                                        isActive: true,
+                                        weightRanges: []
+                                    };
+                                }
+                                regionData[regionId].postalCodes = parsed;
+                                // 从邮编提取FSA代码
+                                const fsaSet = new Set();
+                                parsed.forEach(pc => {
+                                    if (pc && pc.length >= 3) {
+                                        fsaSet.add(pc.substring(0, 3).toUpperCase());
+                                    }
+                                });
+                                regionData[regionId].fsaCodes = Array.from(fsaSet);
+                            }
+                        }
+
+                        const div = document.createElement('div');
+                        div.className = 'data-preview';
+                        div.innerHTML = `<strong>${key}:</strong><pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+                        dataPreview.appendChild(div);
+                    } catch (e) {
+                        showStatus(`解析 ${key} 失败: ${e.message}`, 'error');
+                    }
+                }
+            }
+
+            if (!foundData) {
+                showStatus('未找到本地存储数据', 'warning');
+                dataPreview.innerHTML += '<p>localStorage 中没有找到区域配置数据</p>';
+            } else {
+                // 保存合并后的数据供同步使用
+                window.mergedRegionData = regionData;
+                showStatus(`合并后共有 ${Object.keys(regionData).length} 个区域`, 'info');
+
+                // 显示合并后的数据摘要
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'data-preview';
+                summaryDiv.innerHTML = '<h3>合并后的区域数据摘要：</h3>';
+
+                for (const [regionId, region] of Object.entries(regionData)) {
+                    const regionDiv = document.createElement('div');
+                    regionDiv.className = 'region-item';
+                    regionDiv.innerHTML = `
+                        <strong>区域 ${regionId}: ${region.name}</strong><br>
+                        FSA数量: ${region.fsaCodes ? region.fsaCodes.length : 0}<br>
+                        邮编数量: ${region.postalCodes ? region.postalCodes.length : 0}<br>
+                        状态: ${region.isActive ? '✅ 激活' : '❌ 未激活'}
+                    `;
+                    summaryDiv.appendChild(regionDiv);
+                }
+
+                dataPreview.appendChild(summaryDiv);
+            }
+        }
+
+        async function checkDatabase() {
+            showStatus('检查数据库数据...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/regions?include_inactive=true`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const regions = data.data;
+                    showStatus(`数据库中有 ${regions.length} 个区域`, 'success');
+
+                    const dataPreview = document.getElementById('dataPreview');
+                    dataPreview.innerHTML = '<h3>数据库数据：</h3>';
+
+                    if (regions.length > 0) {
+                        const div = document.createElement('div');
+                        div.className = 'data-preview';
+                        div.innerHTML = `<pre>${JSON.stringify(regions, null, 2)}</pre>`;
+                        dataPreview.appendChild(div);
+                    } else {
+                        dataPreview.innerHTML += '<p>数据库为空</p>';
+                    }
+                } else {
+                    showStatus('获取数据库数据失败', 'error');
+                }
+            } catch (error) {
+                showStatus(`API错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function syncToDatabase() {
+            if (!window.mergedRegionData) {
+                showStatus('请先检查本地数据', 'warning');
+                return;
+            }
+
+            const syncBtn = document.getElementById('syncBtn');
+            syncBtn.disabled = true;
+
+            showStatus('开始同步数据到数据库...', 'info');
+
+            // 过滤掉无效的区域数据
+            const regions = Object.values(window.mergedRegionData).filter(region => {
+                if (!region || !region.id || region.id === 'undefined') {
+                    showStatus(`跳过无效区域: ${JSON.stringify(region)}`, 'warning');
+                    return false;
+                }
+                return true;
+            });
+
+            if (regions.length === 0) {
+                showStatus('没有有效的区域数据可同步', 'error');
+                syncBtn.disabled = false;
+                return;
+            }
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (let i = 0; i < regions.length; i++) {
+                const region = regions[i];
+                showProgress(i + 1, regions.length);
+
+                try {
+                    // 准备数据
+                    const regionData = {
+                        name: region.name || `区域 ${region.id}`,
+                        isActive: region.isActive !== false,
+                        postalCodes: region.postalCodes || region.fsaCodes || [],
+                        weightRanges: region.weightRanges || []
+                    };
+
+                    // 尝试更新，如果失败则创建
+                    let response = await fetch(`${API_BASE}/regions/${region.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(regionData)
+                    });
+
+                    if (response.status === 404) {
+                        // 区域不存在，创建新的
+                        response = await fetch(`${API_BASE}/regions`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                id: region.id,
+                                ...regionData
+                            })
+                        });
+                    }
+
+                    if (response.ok) {
+                        successCount++;
+                        showStatus(`✅ 区域 ${region.id} (${region.name}) 同步成功`, 'success');
+                    } else {
+                        errorCount++;
+                        const error = await response.text();
+                        showStatus(`❌ 区域 ${region.id} 同步失败: ${error}`, 'error');
+                    }
+                } catch (error) {
+                    errorCount++;
+                    showStatus(`❌ 区域 ${region.id} 同步错误: ${error.message}`, 'error');
+                }
+            }
+
+            showProgress(0, 0); // 隐藏进度条
+            syncBtn.disabled = false;
+
+            showStatus(`同步完成！成功: ${successCount}, 失败: ${errorCount}`,
+                       errorCount === 0 ? 'success' : 'warning');
+
+            // 同步完成后，更新localStorage以使用新格式
+            if (successCount > 0) {
+                localStorage.setItem('unified_region_data', JSON.stringify(window.mergedRegionData));
+                showStatus('已更新 localStorage 为统一格式', 'info');
+            }
+        }
+
+        async function clearDatabase() {
+            if (!confirm('确定要清空数据库中的所有区域数据吗？此操作不可恢复！')) {
+                return;
+            }
+
+            showStatus('清空数据库...', 'warning');
+
+            try {
+                const response = await fetch(`${API_BASE}/regions?include_inactive=true`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const regions = data.data;
+
+                    for (const region of regions) {
+                        try {
+                            await fetch(`${API_BASE}/regions/${region.id}`, {
+                                method: 'DELETE'
+                            });
+                            showStatus(`删除区域 ${region.id}`, 'info');
+                        } catch (error) {
+                            showStatus(`删除区域 ${region.id} 失败: ${error.message}`, 'error');
+                        }
+                    }
+
+                    showStatus('数据库已清空', 'success');
+                }
+            } catch (error) {
+                showStatus(`清空数据库失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = () => {
+            checkLocalStorage();
+            checkDatabase();
+        };
+    </script>
+</body>
+</html>

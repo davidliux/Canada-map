@@ -11,6 +11,7 @@ import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerat
 import { getRegionFSAs, getRegionConfig } from '../utils/unifiedStorage';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 import { getRegionByFSA, DEFAULT_REGIONS } from '../data/regionManagement.js';
+import { testRegionFSAs } from '../utils/testRegionData.js';
 import ProvinceAnalyzer from './ProvinceAnalyzer';
 import FixedQuotationPanel from './FixedQuotationPanel';
 import DeliveryAreaStatus from './DeliveryAreaStatus';
@@ -30,7 +31,7 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   const [selectedFSAForQuotation, setSelectedFSAForQuotation] = useState(null);
   const [isUserInteracting, setIsUserInteracting] = useState(false); // 跟踪用户交互状态
   const [selectedRegions, setSelectedRegions] = useState(propSelectedRegions); // 内部管理区域选择状态
-  const [regionFSAsMap, setRegionFSAsMap] = useState({}); // 存储每个区域的FSA列表
+  const [regionFSAsMap, setRegionFSAsMap] = useState(testRegionFSAs); // 使用testRegionFSAs作为初始值，确保颜色始终可见
   const [mapInstance, setMapInstance] = useState(null); // 存储地图实例
   const [visibleRegions, setVisibleRegions] = useState([1, 2, 3, 4, 5]); // 可见的快速筛选区域
   const [showRegionInput, setShowRegionInput] = useState(false); // 是否显示添加区域输入框
@@ -45,20 +46,32 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   useEffect(() => {
     const loadRegionFSAsMap = async () => {
       const map = {};
+      let hasDbData = false;
+
       // 加载所有可能的区域（1-8）
       for (let i = 1; i <= 8; i++) {
         try {
           const fsas = await getRegionFSAs(i.toString());
           if (fsas && fsas.length > 0) {
             map[i.toString()] = fsas;
+            hasDbData = true;
           }
         } catch (error) {
           // 静默处理错误，因为某些区域可能还未配置
-          console.log(`区域${i}暂无数据`);
+          console.log(`区域${i}暂无数据库数据`);
         }
       }
-      setRegionFSAsMap(map);
-      console.log('📊 区域FSA映射加载完成:', Object.keys(map).length, '个区域有数据');
+
+      // 如果数据库有数据，合并到testRegionFSAs；否则继续使用testRegionFSAs
+      if (hasDbData) {
+        // 合并数据库数据和默认数据（数据库优先）
+        const mergedMap = { ...testRegionFSAs, ...map };
+        setRegionFSAsMap(mergedMap);
+        console.log('📊 使用合并的FSA映射（数据库+默认）:', Object.keys(mergedMap).length, '个区域有数据');
+      } else {
+        // 保持使用testRegionFSAs
+        console.log('📊 继续使用默认FSA映射（testRegionFSAs）');
+      }
     };
     loadRegionFSAsMap();
   }, [visibleRegions]); // 当可见区域变化时重新加载
@@ -893,22 +906,34 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   const styleFeature = (feature) => {
     const fsaCode = feature.properties.CFSAUID;
     const isVisible = filteredFSAs.includes(fsaCode);
-    
+
     // 根据FSA获取所属区域的颜色
-    // 注意: 这里需要同步获取颜色，因为styleFeature是同步函数
     let fillColor = '#6B7280'; // 默认灰色（未分配区域）
-    
-    // 从filteredRegions中查找FSA所属区域
-    for (let regionId of Object.keys(regionFSAsMap)) {
-      if (regionFSAsMap[regionId].includes(fsaCode)) {
-        const region = DEFAULT_REGIONS.find(r => r.id === regionId);
-        if (region) {
-          fillColor = region.color;
+
+    // 优先从regionFSAsMap查找（如果已加载）
+    if (Object.keys(regionFSAsMap).length > 0) {
+      for (let regionId of Object.keys(regionFSAsMap)) {
+        if (regionFSAsMap[regionId].includes(fsaCode)) {
+          const region = DEFAULT_REGIONS.find(r => r.id === regionId);
+          if (region) {
+            fillColor = region.color;
+          }
+          break;
         }
-        break;
+      }
+    } else {
+      // 如果regionFSAsMap还未加载，使用testRegionFSAs作为备用
+      for (let regionId of Object.keys(testRegionFSAs)) {
+        if (testRegionFSAs[regionId].includes(fsaCode)) {
+          const region = DEFAULT_REGIONS.find(r => r.id === regionId);
+          if (region) {
+            fillColor = region.color;
+          }
+          break;
+        }
       }
     }
-    
+
     return {
       fillColor: fillColor,
       weight: isVisible ? 2 : 1,

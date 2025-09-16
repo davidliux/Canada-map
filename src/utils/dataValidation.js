@@ -1,6 +1,6 @@
 // FSA数据验证和完整性检查工具
 
-import { deliverableFSAs } from '../data/deliverableFSA';
+import { deliverableFSAs } from '../data/deliverableFSA.js';
 
 /**
  * 验证FSA代码格式

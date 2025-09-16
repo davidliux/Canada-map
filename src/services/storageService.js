@@ -1,14 +1,9 @@
 /**
  * 混合存储服务
  * 提供本地缓存和后端同步的统一接口
- * 支持三种模式：
- * 1. Serverless (Vercel) - 使用 Vercel Functions
- * 2. Local (开发) - 使用本地 Express 后端
- * 3. Disabled - 仅使用 localStorage
  */
 
 import regionApiService from './regionApiService';
-import { getApiMode, environmentConfig } from '../utils/apiClient';
 
 class StorageService {
   constructor() {
@@ -18,34 +13,14 @@ class StorageService {
     this.syncInterval = null;
     this.listeners = new Set();
     
-    // 根据环境配置设置选项
+    // 配置选项
     this.config = {
-      enableLocalCache: true,
-      enableAutoSync: environmentConfig.apiEnabled(), // 使用环境配置判断 API 是否可用
-      syncIntervalMs: 5000, // 5秒自动同步
+      enableLocalCache: false, // 禁用本地缓存，强制使用数据库
+      enableAutoSync: true, // 启用自动同步到数据库
+      syncIntervalMs: 1000, // 1秒自动同步，更快响应
       maxRetries: 3,
-      retryDelayMs: 1000,
-      apiMode: environmentConfig.apiMode // 使用环境配置的 API 模式
+      retryDelayMs: 1000
     };
-    
-    console.log(`StorageService 初始化 - API 模式: ${this.config.apiMode}`);
-    
-    // 监听环境变化
-    window.addEventListener('environment-ready', (event) => {
-      const newMode = event.detail.apiMode;
-      if (newMode !== this.config.apiMode) {
-        console.log(`API 模式变更: ${this.config.apiMode} -> ${newMode}`);
-        this.config.apiMode = newMode;
-        this.config.enableAutoSync = environmentConfig.apiEnabled();
-        
-        // 如果 API 变为可用，尝试同步
-        if (this.config.enableAutoSync && !this.syncInterval) {
-          this.startAutoSync();
-        } else if (!this.config.enableAutoSync && this.syncInterval) {
-          this.stopAutoSync();
-        }
-      }
-    });
     
     // 初始化
     this.init();
@@ -55,91 +30,51 @@ class StorageService {
    * 初始化服务
    */
   async init() {
-    // 防止重复初始化
-    if (this.isInitialized) {
-      console.log('StorageService 已初始化，跳过');
-      return;
-    }
-    this.isInitialized = true;
-    
-    // 先从本地存储恢复缓存作为备用
-    this.restoreLocalCache();
-    
-    // 只在启用后端同步时尝试从数据库获取数据
-    if (this.config.enableAutoSync) {
-      try {
+    // 不再从localStorage恢复缓存，直接从数据库获取
+    // this.restoreLocalCache(); // 移除localStorage依赖
+
+    // 始终从数据库获取最新数据
+    try {
+      // 检查是否需要初始化 regions（仅在 FSA 系统中使用）
+      // 卡车配送系统不需要这个
+      const pathname = window.location.pathname;
+      const isFSASystem = pathname === '/dashboard' ||
+                          pathname.startsWith('/settings/regions') ||
+                          pathname.startsWith('/settings/prices') ||
+                          pathname.startsWith('/settings/postal');
+
+      if (isFSASystem) {
+        console.log('正在从数据库加载数据...');
         const regions = await regionApiService.getAllRegions();
-        
-        // 如果数据库有数据，智能合并而不是覆盖
+
+        // 直接使用数据库数据
         if (regions && Object.keys(regions).length > 0) {
-        console.log('从数据库加载数据，准备合并...');
-        
-        // 智能合并：保留更完整的数据
-        Object.entries(regions).forEach(([id, serverData]) => {
-          const localData = this.localCache.get(id);
-          
-          if (!localData) {
-            // 本地没有此区域，直接使用服务器数据
+          console.log('成功从数据库加载数据');
+
+          // 清空缓存并重新加载
+          this.localCache.clear();
+          Object.entries(regions).forEach(([id, serverData]) => {
             this.localCache.set(id, serverData);
-          } else {
-            // 合并数据：优先使用有内容的数据
-            const mergedData = {
-              ...serverData,
-              // 如果服务器的postalCodes为空但本地有数据，保留本地数据
-              postalCodes: (serverData.postalCodes && serverData.postalCodes.length > 0) 
-                ? serverData.postalCodes 
-                : (localData.postalCodes || []),
-              // 同样处理weightRanges
-              weightRanges: (serverData.weightRanges && serverData.weightRanges.length > 0)
-                ? serverData.weightRanges
-                : (localData.weightRanges || [])
-            };
-            
-            this.localCache.set(id, mergedData);
-            
-            // 如果本地数据更完整，同步回服务器
-            if (localData.postalCodes && localData.postalCodes.length > 0 && 
-                (!serverData.postalCodes || serverData.postalCodes.length === 0)) {
-              console.log(`区域 ${id} 本地有邮编数据但服务器无，准备同步到服务器`);
-              this.addToSyncQueue({
-                type: 'update',
-                regionId: id,
-                data: mergedData,
-                timestamp: Date.now()
-              });
-            }
-          }
-        });
-        
-        this.saveLocalCache();
-        console.log('数据合并完成，区域数量:', this.localCache.size);
-      } else {
-        console.log('数据库无数据，使用本地缓存');
-        // 如果本地缓存也为空，触发默认数据初始化
-        if (this.localCache.size === 0) {
-          console.log('本地缓存也为空，需要手动创建区域配置');
-        }
-        }
-      } catch (error) {
-        console.warn('从数据库加载数据失败，使用本地缓存:', error);
-        // 如果本地缓存也为空，这是一个问题
-        if (this.localCache.size === 0) {
-          console.error('数据库和本地缓存都无数据，系统需要初始化');
+          });
+
+          // 不再保存到localStorage
+          // this.saveLocalCache(); // 移除localStorage保存
+          console.log('数据库数据加载完成，区域数量:', this.localCache.size);
+        } else {
+          console.log('数据库暂无数据，需要创建区域配置');
         }
       }
-    } else {
-      console.log('后端同步已禁用，使用纯前端模式');
-      // 如果本地缓存为空，不报错，让初始化函数处理
-      if (this.localCache.size === 0) {
-        console.log('本地缓存为空，等待初始化数据');
-      }
+    } catch (error) {
+      console.error('从数据库加载数据失败:', error);
+      // 不再使用localStorage作为备份
+      console.error('无法连接到数据库，请检查后端服务');
     }
-    
+
     // 启动自动同步
     if (this.config.enableAutoSync) {
       this.startAutoSync();
     }
-    
+
     // 监听页面卸载事件，确保数据保存
     window.addEventListener('beforeunload', () => this.flushSync());
   }
@@ -182,40 +117,40 @@ class StorageService {
    * @returns {Promise<Object>} 区域配置
    */
   async getAllRegions(forceRefresh = false) {
-    // 如果不强制刷新且有缓存，返回缓存
-    if (!forceRefresh && this.localCache.size > 0) {
-      const regions = {};
-      this.localCache.forEach((value, key) => {
-        regions[key] = value;
-      });
-      return regions;
-    }
-
+    // 始终从数据库获取最新数据，不再依赖本地缓存
     try {
+      console.log('正在从数据库获取区域数据...');
       // 从服务器获取数据
       const regions = await regionApiService.getAllRegions(true, true);
-      
-      // 更新本地缓存
+
+      // 更新内存缓存（仅用于性能优化，不作为数据源）
       this.localCache.clear();
       Object.entries(regions).forEach(([key, value]) => {
         this.localCache.set(key, value);
       });
-      
-      // 保存到localStorage
-      this.saveLocalCache();
-      
+
+      // 不再保存到localStorage
+      // this.saveLocalCache(); // 移除localStorage保存
+
       // 通知监听器
       this.notifyListeners('refresh', regions);
-      
+
+      console.log('成功从数据库获取数据，区域数量:', Object.keys(regions).length);
       return regions;
     } catch (error) {
-      console.error('获取区域数据失败，使用本地缓存:', error);
-      // 如果API失败，返回本地缓存
-      const regions = {};
-      this.localCache.forEach((value, key) => {
-        regions[key] = value;
-      });
-      return regions;
+      console.error('获取区域数据失败:', error);
+      // 如果内存中有缓存，返回内存缓存（仅作为临时降级方案）
+      if (this.localCache.size > 0) {
+        console.warn('使用内存缓存作为临时降级方案');
+        const regions = {};
+        this.localCache.forEach((value, key) => {
+          regions[key] = value;
+        });
+        return regions;
+      }
+      // 如果没有任何数据，返回空对象
+      console.error('无法获取任何数据');
+      return {};
     }
   }
 
@@ -252,29 +187,38 @@ class StorageService {
    * @returns {Promise<Object>} 更新后的区域
    */
   async updateRegion(regionId, updateData) {
-    // 先更新本地缓存（乐观更新）
-    const currentData = this.localCache.get(regionId) || {};
-    const updatedData = { ...currentData, ...updateData, lastUpdated: new Date().toISOString() };
-    this.localCache.set(regionId, updatedData);
-    this.saveLocalCache();
-    
-    // 通知监听器
-    this.notifyListeners('update', { regionId, data: updatedData });
-    
-    // 添加到同步队列
-    this.addToSyncQueue({
-      type: 'update',
-      regionId,
-      data: updateData,
-      timestamp: Date.now()
-    });
-    
-    // 触发同步（如果启用）
-    if (this.config.enableAutoSync) {
-      this.triggerSync();
+    try {
+      // 直接调用API更新数据库
+      const updatedData = await regionApiService.updateRegion(regionId, updateData);
+
+      // 更新本地缓存（如果启用）
+      if (this.config.enableLocalCache) {
+        this.localCache.set(regionId, updatedData);
+        this.saveLocalCache();
+      }
+
+      // 通知监听器
+      this.notifyListeners('update', { regionId, data: updatedData });
+
+      return updatedData;
+    } catch (error) {
+      console.error('更新区域失败:', error);
+
+      // 如果API失败，添加到同步队列稍后重试
+      this.addToSyncQueue({
+        type: 'update',
+        regionId,
+        data: updateData,
+        timestamp: Date.now()
+      });
+
+      // 返回本地数据（如果有）
+      const localData = this.localCache.get(regionId);
+      if (localData) {
+        return { ...localData, ...updateData };
+      }
+      throw error;
     }
-    
-    return updatedData;
   }
 
   /**
@@ -284,27 +228,40 @@ class StorageService {
    * @returns {Promise<void>}
    */
   async updateRegionFSAs(regionId, fsaCodes) {
-    const region = this.localCache.get(regionId) || {};
-    region.fsaCodes = fsaCodes;
-    region.lastUpdated = new Date().toISOString();
-    
-    this.localCache.set(regionId, region);
-    this.saveLocalCache();
-    
-    // 通知监听器
-    this.notifyListeners('fsa-update', { regionId, fsaCodes });
-    
-    // 添加到同步队列 - 只更新fsaCodes字段
-    this.addToSyncQueue({
-      type: 'update',
-      regionId,
-      data: { fsaCodes },
-      timestamp: Date.now()
-    });
-    
-    // 触发同步（如果启用）
-    if (this.config.enableAutoSync) {
-      this.triggerSync();
+    try {
+      // 直接更新数据库
+      const updateData = {
+        postalCodes: fsaCodes,
+        fsaCodes: fsaCodes,
+        lastUpdated: new Date().toISOString()
+      };
+
+      await regionApiService.updateRegion(regionId, updateData);
+
+      // 更新本地缓存（如果启用）
+      if (this.config.enableLocalCache) {
+        const region = this.localCache.get(regionId) || {};
+        region.fsaCodes = fsaCodes;
+        region.postalCodes = fsaCodes;
+        region.lastUpdated = updateData.lastUpdated;
+        this.localCache.set(regionId, region);
+        this.saveLocalCache();
+      }
+
+      // 通知监听器
+      this.notifyListeners('fsa-update', { regionId, fsaCodes });
+    } catch (error) {
+      console.error('更新FSA失败:', error);
+
+      // 添加到同步队列稍后重试
+      this.addToSyncQueue({
+        type: 'update',
+        regionId,
+        data: { fsaCodes, postalCodes: fsaCodes },
+        timestamp: Date.now()
+      });
+
+      throw error;
     }
   }
 
@@ -346,27 +303,38 @@ class StorageService {
    * @returns {Promise<void>}
    */
   async updateRegionPrices(regionId, weightRanges) {
-    const region = this.localCache.get(regionId) || {};
-    region.weightRanges = weightRanges;
-    region.lastUpdated = new Date().toISOString();
-    
-    this.localCache.set(regionId, region);
-    this.saveLocalCache();
-    
-    // 通知监听器
-    this.notifyListeners('price-update', { regionId, weightRanges });
-    
-    // 添加到同步队列
-    this.addToSyncQueue({
-      type: 'prices',
-      regionId,
-      data: { weightRanges },
-      timestamp: Date.now()
-    });
-    
-    // 触发同步（如果启用）
-    if (this.config.enableAutoSync) {
-      this.triggerSync();
+    try {
+      // 直接更新数据库
+      const updateData = {
+        weightRanges: weightRanges,
+        lastUpdated: new Date().toISOString()
+      };
+
+      await regionApiService.updateRegion(regionId, updateData);
+
+      // 更新本地缓存（如果启用）
+      if (this.config.enableLocalCache) {
+        const region = this.localCache.get(regionId) || {};
+        region.weightRanges = weightRanges;
+        region.lastUpdated = updateData.lastUpdated;
+        this.localCache.set(regionId, region);
+        this.saveLocalCache();
+      }
+
+      // 通知监听器
+      this.notifyListeners('price-update', { regionId, weightRanges });
+    } catch (error) {
+      console.error('更新价格失败:', error);
+
+      // 添加到同步队列稍后重试
+      this.addToSyncQueue({
+        type: 'prices',
+        regionId,
+        data: { weightRanges },
+        timestamp: Date.now()
+      });
+
+      throw error;
     }
   }
 

@@ -15,12 +15,9 @@ import {
 import RegionSelector from './RegionSelector';
 import RegionPriceManager from './RegionPriceManager';
 import DirectPostalCodeManager from './DirectPostalCodeManager';
-import BatchPriceManager from './BatchPriceManager';
+// import BatchPriceManager from './BatchPriceManager'; // 组件待实现
 import compatLayer from '../utils/unifiedStorageCompat';
-import {
-  getAllRegionConfigs,
-  getStorageStats
-} from '../utils/unifiedStorage';
+import storageService from '../services/storageService';
 import {
   getRegionDisplayInfo
 } from '../data/regionManagement.js';
@@ -74,13 +71,46 @@ const RegionManagementPanel = ({
    */
   const loadData = async () => {
     try {
-      console.log('开始加载区域管理数据...');
+      console.log('开始从数据库加载区域管理数据...');
 
-      // 优先从 Supabase 获取数据
-      const regions = await getAllRegionConfigs(true); // 强制刷新
-      const stats = await getStorageStats(true); // 现在也是异步的
+      // 使用异步API直接从数据库加载
+      const regions = await storageService.getAllRegions(true); // forceRefresh=true
 
-      console.log('数据加载完成:', { regions, stats });
+      // 计算统计信息
+      const regionIds = Object.keys(regions);
+      let totalPostalCodes = 0;
+      let activeRegions = 0;
+      const allAssignedFSAs = new Set();
+
+      regionIds.forEach(regionId => {
+        const config = regions[regionId];
+        if (config) {
+          const postalCodes = config.postalCodes || [];
+          totalPostalCodes += postalCodes.length;
+
+          if (config.isActive) {
+            activeRegions++;
+          }
+
+          // 提取并收集唯一的FSA
+          postalCodes.forEach(code => {
+            if (typeof code === 'string' && code.length >= 3) {
+              const fsa = code.substring(0, 3).toUpperCase();
+              allAssignedFSAs.add(fsa);
+            }
+          });
+        }
+      });
+
+      const stats = {
+        regionCount: regionIds.length,
+        activeRegions,
+        totalFSAs: totalPostalCodes,
+        assignedFSAs: allAssignedFSAs.size,
+        unassignedFSAs: 0
+      };
+
+      console.log('数据从数据库加载完成:', { regions, stats });
 
       setRegionConfigs(regions);
       setStorageStats(stats);
@@ -296,9 +326,12 @@ const RegionManagementPanel = ({
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <BatchPriceManager
+                  {/* <BatchPriceManager
                     onConfigChange={onConfigChange}
-                  />
+                  /> */}
+                  <div className="p-4 text-gray-400 text-center">
+                    批量价格管理功能即将推出
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

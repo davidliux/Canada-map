@@ -70,7 +70,7 @@ export const useDataUpdateListener = (callback, deps = []) => {
 /**
  * 通知区域配置更新
  * @param {string} regionId - 区域ID
- * @param {string} updateType - 更新类型 ('postalCodes', 'pricing', 'status')
+ * @param {string} updateType - 更新类型 ('postalCodes', 'pricing', 'status', 'groupCreate', 'groupUpdate', 'groupDelete')
  * @param {Object} data - 更新数据
  */
 export const notifyRegionUpdate = (regionId, updateType, data = {}) => {
@@ -103,6 +103,88 @@ export const notifyDataOperation = (operation, result = {}) => {
 export const notifyGlobalRefresh = () => {
   dataUpdateNotifier.notify({
     type: 'globalRefresh',
+    timestamp: new Date().toISOString()
+  });
+};
+
+/**
+ * 通知FSA组创建
+ * @param {string} regionId - 区域ID
+ * @param {Object} group - 创建的组对象
+ */
+export const notifyGroupCreate = (regionId, group) => {
+  dataUpdateNotifier.notify({
+    type: 'fsaGroupUpdate',
+    action: 'create',
+    regionId,
+    group,
+    timestamp: new Date().toISOString()
+  });
+};
+
+/**
+ * 通知FSA组更新
+ * @param {string} regionId - 区域ID
+ * @param {string} groupId - 组ID
+ * @param {Object} updates - 更新内容
+ */
+export const notifyGroupUpdate = (regionId, groupId, updates) => {
+  dataUpdateNotifier.notify({
+    type: 'fsaGroupUpdate',
+    action: 'update',
+    regionId,
+    groupId,
+    updates,
+    timestamp: new Date().toISOString()
+  });
+};
+
+/**
+ * 通知FSA组删除
+ * @param {string} regionId - 区域ID
+ * @param {string} groupId - 删除的组ID
+ * @param {Array} releasedFSAs - 释放的FSA列表
+ */
+export const notifyGroupDelete = (regionId, groupId, releasedFSAs = []) => {
+  dataUpdateNotifier.notify({
+    type: 'fsaGroupUpdate',
+    action: 'delete',
+    regionId,
+    groupId,
+    releasedFSAs,
+    timestamp: new Date().toISOString()
+  });
+};
+
+/**
+ * 通知FSA组价格更新
+ * @param {string} regionId - 区域ID
+ * @param {string} groupId - 组ID
+ * @param {Object} pricingConfig - 新的价格配置
+ */
+export const notifyGroupPricingUpdate = (regionId, groupId, pricingConfig) => {
+  dataUpdateNotifier.notify({
+    type: 'fsaGroupUpdate',
+    action: 'pricingUpdate',
+    regionId,
+    groupId,
+    pricingConfig,
+    timestamp: new Date().toISOString()
+  });
+};
+
+/**
+ * 通知FSA组批量操作
+ * @param {string} regionId - 区域ID
+ * @param {string} operation - 操作类型 ('merge', 'split', 'batchMove')
+ * @param {Object} details - 操作详情
+ */
+export const notifyGroupBatchOperation = (regionId, operation, details) => {
+  dataUpdateNotifier.notify({
+    type: 'fsaGroupBatchOperation',
+    regionId,
+    operation,
+    details,
     timestamp: new Date().toISOString()
   });
 };

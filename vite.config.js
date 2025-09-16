@@ -6,7 +6,14 @@ export default defineConfig({
   server: {
     port: 5001,
     open: true,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5050',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   preview: {
     port: 5001

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>初始化数据库区域</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #00ff9f;
+            border-bottom: 2px solid #00ff9f;
+            padding-bottom: 10px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .success {
+            background: #1a4d2e;
+            color: #4ade80;
+            border-left: 4px solid #4ade80;
+        }
+        .error {
+            background: #4d1a1a;
+            color: #f87171;
+            border-left: 4px solid #f87171;
+        }
+        .info {
+            background: #1a3d4d;
+            color: #60a5fa;
+            border-left: 4px solid #60a5fa;
+        }
+        button {
+            background: #00ff9f;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00cc7f;
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            color: #999;
+        }
+        .progress {
+            width: 100%;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff9f, #00cc7f);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 初始化数据库区域</h1>
+
+        <div id="status"></div>
+
+        <div class="button-group">
+            <button onclick="initializeRegions()">初始化8个默认区域</button>
+            <button onclick="checkDatabase()">检查数据库状态</button>
+            <button onclick="clearDatabase()">清空数据库</button>
+        </div>
+
+        <div class="progress" style="display:none;" id="progressBar">
+            <div class="progress-bar" id="progressBarFill">0%</div>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script type="module">
+        import {
+            createDefaultRegionConfig,
+            saveRegionConfig,
+            getAllRegionConfigs
+        } from './src/utils/unifiedStorage.js';
+
+        const API_BASE = 'http://localhost:5050/api/v1';
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `${new Date().toLocaleTimeString()} - ${message}`;
+            statusDiv.appendChild(div);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+
+        function showProgress(current, total) {
+            const progressBar = document.getElementById('progressBar');
+            const progressBarFill = document.getElementById('progressBarFill');
+
+            if (total > 0) {
+                progressBar.style.display = 'block';
+                const percent = Math.round((current / total) * 100);
+                progressBarFill.style.width = percent + '%';
+                progressBarFill.textContent = `${percent}% (${current}/${total})`;
+            } else {
+                progressBar.style.display = 'none';
+            }
+        }
+
+        window.initializeRegions = async function() {
+            showStatus('开始初始化8个默认区域...', 'info');
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (let i = 1; i <= 8; i++) {
+                showProgress(i, 8);
+
+                try {
+                    // 创建默认配置
+                    const config = createDefaultRegionConfig(i.toString(), `区域 ${i}`);
+
+                    // 保存到数据库
+                    const success = await saveRegionConfig(i.toString(), config);
+
+                    if (success) {
+                        successCount++;
+                        showStatus(`✅ 区域 ${i} 初始化成功`, 'success');
+                    } else {
+                        errorCount++;
+                        showStatus(`❌ 区域 ${i} 初始化失败`, 'error');
+                    }
+                } catch (error) {
+                    errorCount++;
+                    showStatus(`❌ 区域 ${i} 错误: ${error.message}`, 'error');
+                }
+            }
+
+            showProgress(0, 0); // 隐藏进度条
+
+            showStatus(`初始化完成！成功: ${successCount}, 失败: ${errorCount}`,
+                       errorCount === 0 ? 'success' : 'warning');
+
+            // 显示结果
+            await checkDatabase();
+        };
+
+        window.checkDatabase = async function() {
+            showStatus('检查数据库状态...', 'info');
+
+            try {
+                // 从API获取
+                const response = await fetch(`${API_BASE}/regions?include_inactive=true`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const regions = data.data;
+                    showStatus(`数据库中有 ${regions.length} 个区域`, 'success');
+
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.innerHTML = '<h3>数据库区域：</h3>';
+
+                    if (regions.length > 0) {
+                        regions.forEach(region => {
+                            const div = document.createElement('div');
+                            div.className = 'status info';
+                            div.innerHTML = `
+                                <strong>区域 ${region.id}: ${region.name}</strong><br>
+                                状态: ${region.isActive ? '✅ 激活' : '❌ 未激活'}<br>
+                                邮编数量: ${region.postalCodes ? region.postalCodes.length : 0}<br>
+                                价格区间: ${region.weightRanges ? region.weightRanges.length : 0} 个
+                            `;
+                            resultDiv.appendChild(div);
+                        });
+                    } else {
+                        resultDiv.innerHTML += '<p>数据库为空，请点击"初始化8个默认区域"</p>';
+                    }
+                } else {
+                    showStatus('获取数据库数据失败', 'error');
+                }
+            } catch (error) {
+                showStatus(`API错误: ${error.message}`, 'error');
+            }
+        };
+
+        window.clearDatabase = async function() {
+            if (!confirm('确定要清空数据库中的所有区域吗？')) {
+                return;
+            }
+
+            showStatus('清空数据库...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/regions?include_inactive=true`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const regions = data.data;
+                    let deleteCount = 0;
+
+                    for (const region of regions) {
+                        try {
+                            await fetch(`${API_BASE}/regions/${region.id}`, {
+                                method: 'DELETE'
+                            });
+                            deleteCount++;
+                            showStatus(`删除区域 ${region.id}`, 'info');
+                        } catch (error) {
+                            showStatus(`删除区域 ${region.id} 失败: ${error.message}`, 'error');
+                        }
+                    }
+
+                    showStatus(`数据库已清空，删除了 ${deleteCount} 个区域`, 'success');
+
+                    // 刷新显示
+                    await checkDatabase();
+                }
+            } catch (error) {
+                showStatus(`清空数据库失败: ${error.message}`, 'error');
+            }
+        };
+
+        // 页面加载时自动检查
+        window.onload = () => {
+            checkDatabase();
+        };
+    </script>
+</body>
+</html>

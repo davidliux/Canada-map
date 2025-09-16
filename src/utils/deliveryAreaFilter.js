@@ -18,10 +18,9 @@ export const getAllDeliveryFSAs = async () => {
     Object.keys(regionConfigs).forEach(regionId => {
       const config = regionConfigs[regionId];
       
-      // 只包含活跃区域的FSA (支持多种字段名)
-      const fsaCodes = config?.fsaCodes || config?.fsa_codes || config?.postalCodes || [];
-      if (config && config.isActive && fsaCodes.length > 0) {
-        fsaCodes.forEach(fsa => {
+      // 只包含活跃区域的FSA
+      if (config && config.isActive && config.postalCodes) {
+        config.postalCodes.forEach(fsa => {
           if (fsa && fsa.trim()) {
             deliveryFSAs.add(fsa.trim().toUpperCase());
           }
@@ -154,9 +153,7 @@ export const getDeliveryAreaStats = async () => {
         stats.activeRegions++;
       }
       
-      // 支持多种字段名格式
-      const fsaCodes = config.fsaCodes || config.fsa_codes || config.postalCodes || [];
-      const fsaCount = fsaCodes.length;
+      const fsaCount = config.postalCodes ? config.postalCodes.length : 0;
       stats.totalFSAs += fsaCount;
       
       stats.regionDetails[regionId] = {

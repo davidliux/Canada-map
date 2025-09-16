@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "description": "加拿大快递邮编展示系统 - 基于Statistics Canada官方FSA边界数据的可视化展示应用",
   "author": "Canada Postal Delivery System",
-  "main": "electron.js",
   "homepage": "./",
   "scripts": {
     "dev": "vite --port 5001",
@@ -21,14 +20,9 @@
     "setup:db": "cd backend && npx prisma migrate dev --name init && npx prisma generate && cd ..",
     "clean": "rm -rf node_modules dist backend/node_modules",
     "clean:win": "if exist node_modules rmdir /s /q node_modules && if exist dist rmdir /s /q dist && if exist backend\node_modules rmdir /s /q backend\node_modules",
-    "test": "cd backend && npm test",
-    "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3001 && electron .\"",
-    "build-electron": "npm run build && electron-builder",
-    "dist": "npm run build && electron-builder --publish=never"
+    "test": "cd backend && npm test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.0",
     "axios": "^1.6.0",
     "framer-motion": "^10.16.0",
     "leaflet": "^1.9.4",
@@ -48,55 +42,10 @@
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.16",
     "concurrently": "^9.2.1",
-    "electron": "^36.4.0",
-    "electron-builder": "^26.0.12",
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.4.32",
     "vite": "^5.0.8",
     "wait-on": "^8.0.3"
-  },
-  "build": {
-    "appId": "com.canadapostal.deliverymap",
-    "productName": "加拿大快递邮编展示系统",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "electron.js",
-      "assets/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ],
-      "requestedExecutionLevel": "asInvoker",
-      "signAndEditExecutable": false,
-      "verifyUpdateCodeSignature": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "加拿大快递邮编展示系统"
-    },
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.business"
-    },
-    "linux": {
-      "target": "AppImage",
-      "category": "Office"
-    }
-  }
-}
+  }}

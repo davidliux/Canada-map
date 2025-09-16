@@ -93,11 +93,6 @@ app-builds/
 .vercel
 .env*.local
 
-# Large data files
-public/data/lfsa000a21g_e/
-*.gml
-fsa_data/
-
 # Backend database
 backend/prisma/*.db
 backend/prisma/*.db-journal
@@ -119,9 +114,3 @@ test_*.html
 *_DEBUG*.md
 *_ARCHITECTURE.md
 *_SUMMARY.md 
-# Environment files
-.env.local
-.env.*.local
-
-# Vercel
-.vercel

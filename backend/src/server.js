@@ -35,6 +35,26 @@ app.get('/api/v1/health', (req, res) => {
   res.json({ success: true, data: { status: 'ok' } });
 });
 
+// 添加卡车配送路由
+const truckDeliveryRoutes = require('./routes/truckDelivery');
+app.use('/api/v1/truck-delivery', truckDeliveryRoutes);
+
+// 添加动态定价路由（使用模拟版本）
+const truckPricingRoutes = require('./routes/truckPricingMock');
+app.use('/api/v1/truck-delivery', truckPricingRoutes);
+
+// 添加服务商管理路由
+const providerRoutes = require('./routes/providers');
+app.use('/api/v1/providers', providerRoutes);
+
+// 添加板数定价路由
+const skidPricingRoutes = require('./routes/skidPricing');
+app.use('/api/v1/truck-delivery', skidPricingRoutes);
+
+// 添加定价配置路由
+const pricingRoutes = require('./routes/pricing');
+app.use('/api/v1', pricingRoutes);
+
 // Regions - read-only minimal
 app.get('/api/v1/regions', async (req, res, next) => {
   try {
@@ -143,14 +163,17 @@ app.post('/api/v1/calculate-price', async (req, res, next) => {
 app.post('/api/v1/regions', async (req, res, next) => {
   try {
     const { id, name, isActive, postalCodes = [], weightRanges = [], prices = {} } = req.body;
-    
+
+    // Generate ID if not provided (max 10 chars)
+    const regionId = id || `r${Date.now() % 1000000}`;
+
     // Create region
     const region = await prisma.deliveryRegion.create({
       data: {
-        id: id || undefined,
-        name: name || `区域${id}`,
-        isActive: isActive || false,
-        displayOrder: parseInt(id) || 999
+        id: regionId,
+        name: name || `区域${regionId}`,
+        isActive: isActive !== undefined ? isActive : true,
+        displayOrder: 999
       }
     });
 

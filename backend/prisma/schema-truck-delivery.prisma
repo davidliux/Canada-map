@@ -1,0 +1,121 @@
+// Truck Delivery System Database Schema
+// PostgreSQL Database Schema for Canada Truck Delivery Management
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 卡车配送城市表
+model TruckDeliveryCity {
+  id          String   @id @db.VarChar(50)  // 使用前端生成的ID格式
+  name        String   @db.VarChar(100)
+  province    String   @db.VarChar(2)        // 省份代码 (ON, QC, BC等)
+  themeColor  String   @map("theme_color") @db.VarChar(7)  // HEX颜色代码
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  version     Int      @default(1)
+
+  // 关联关系
+  regions TruckDeliveryRegion[]
+
+  @@map("truck_delivery_cities")
+  @@index([province])
+  @@index([isActive])
+}
+
+// 卡车配送区域表
+model TruckDeliveryRegion {
+  id          String   @id @db.VarChar(50)  // 使用前端生成的ID格式
+  cityId      String   @map("city_id") @db.VarChar(50)
+  level       Int                          // 区域等级 1-10
+  name        String   @db.VarChar(100)
+  displayColor String? @map("display_color") @db.VarChar(7)  // 可选的自定义颜色
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  version     Int      @default(1)
+
+  // 关联关系
+  city       TruckDeliveryCity    @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  fsaCodes   TruckDeliveryFSA[]
+  priceTable TruckDeliveryPrice?
+
+  @@map("truck_delivery_regions")
+  @@unique([cityId, level])
+  @@index([cityId])
+  @@index([isActive])
+}
+
+// FSA代码表
+model TruckDeliveryFSA {
+  id        String   @id @default(uuid()) @db.Uuid
+  regionId  String   @map("region_id") @db.VarChar(50)
+  fsaCode   String   @map("fsa_code") @db.VarChar(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // 关联关系
+  region TruckDeliveryRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@map("truck_delivery_fsa")
+  @@unique([regionId, fsaCode])
+  @@index([fsaCode])
+  @@index([regionId])
+}
+
+// 价格配置表
+model TruckDeliveryPrice {
+  id         String   @id @default(uuid()) @db.Uuid
+  regionId   String   @unique @map("region_id") @db.VarChar(50)
+  currency   String   @default("CAD") @db.VarChar(3)
+  effectiveDate DateTime? @map("effective_date") @db.Date
+  expiryDate    DateTime? @map("expiry_date") @db.Date
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // 关联关系
+  region       TruckDeliveryRegion     @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  priceRanges  TruckDeliveryPriceRange[]
+
+  @@map("truck_delivery_prices")
+  @@index([regionId])
+}
+
+// 价格区间表
+model TruckDeliveryPriceRange {
+  id          String   @id @default(uuid()) @db.Uuid
+  priceId     String   @map("price_id") @db.Uuid
+  rangeId     String   @map("range_id") @db.VarChar(20)  // range_1 to range_13
+  minWeight   Decimal  @map("min_weight") @db.Decimal(8, 2)
+  maxWeight   Decimal  @map("max_weight") @db.Decimal(8, 2)
+  label       String   @db.VarChar(50)  // 如 "0-11 KGS"
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // 关联关系
+  priceTable TruckDeliveryPrice @relation(fields: [priceId], references: [id], onDelete: Cascade)
+
+  @@map("truck_delivery_price_ranges")
+  @@unique([priceId, rangeId])
+  @@index([priceId])
+  @@index([isActive])
+}
+
+// FSA主索引表（用于快速查找FSA属于哪个城市）
+model TruckDeliveryFSAIndex {
+  fsaCode   String   @id @map("fsa_code") @db.VarChar(3)
+  cityId    String   @map("city_id") @db.VarChar(50)
+  regionId  String   @map("region_id") @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("truck_delivery_fsa_index")
+  @@index([cityId])
+}

@@ -1,27 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  DollarSign, 
-  Copy, 
-  Percent, 
-  Save, 
+import {
+  DollarSign,
+  Copy,
+  Percent,
+  Save,
   RotateCcw,
   AlertTriangle,
   CheckCircle,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Edit2,
+  Database
 } from 'lucide-react';
 import WeightRangeManager from './WeightRangeManager';
+import PriceTableImport from './PriceTableImport';
 import {
   getAllRegionConfigs,
   saveRegionConfig
 } from '../utils/unifiedStorage.js';
-import { 
-  copyRegionPricing, 
-  adjustRegionPricing, 
-  getRegionDisplayInfo 
+import storageService from '../services/storageService';
+import {
+  copyRegionPricing,
+  adjustRegionPricing,
+  getRegionDisplayInfo
 } from '../data/regionManagement.js';
-import { apiGet } from '../utils/apiClient.js';
+import { apiGet, apiPut } from '../utils/apiClient.js';
 
 /**
  * 区域价格管理器组件
@@ -46,6 +50,7 @@ const RegionPriceManager = ({
   // API 只读模式
   const [apiModeEnabled, setApiModeEnabled] = useState(false);
   const [apiRanges, setApiRanges] = useState([]);
+  const [editMode, setEditMode] = useState(false); // 添加编辑模式开关
 
   // 加载区域配置（本地存储）
   useEffect(() => {
@@ -70,16 +75,6 @@ const RegionPriceManager = ({
         setApiModeEnabled(false);
         return;
       }
-      
-      // 使用环境配置检查 API 是否可用
-      const { isApiEnabled } = await import('../utils/apiClient');
-      if (!isApiEnabled()) {
-        // API禁用时，不尝试调用API
-        setApiRanges([]);
-        setApiModeEnabled(false);
-        return;
-      }
-      
       try {
         const data = await apiGet(`/regions/${selectedRegion}/weight-ranges`);
         if (cancelled) return;
@@ -94,7 +89,6 @@ const RegionPriceManager = ({
         setApiRanges(mapped);
         setApiModeEnabled(mapped.length > 0);
       } catch (e) {
-        console.log('API不可用，使用本地存储模式');
         setApiRanges([]);
         setApiModeEnabled(false);
       }
@@ -109,8 +103,11 @@ const RegionPriceManager = ({
   const loadRegionConfigs = async () => {
     setIsLoading(true);
     try {
-      const configs = await getAllRegionConfigs(true); // 改为异步调用并强制刷新
+      console.log('正在从数据库加载价格配置...');
+      // 使用异步API直接从数据库加载
+      const configs = await storageService.getAllRegions(true); // forceRefresh=true
       setRegionConfigs(configs);
+      console.log('价格配置从数据库加载完成:', configs);
     } catch (error) {
       console.error('加载区域配置失败:', error);
     } finally {
@@ -119,10 +116,59 @@ const RegionPriceManager = ({
   };
 
   /**
+   * 保存价格配置到数据库
+   */
+  const handleSaveToDatabase = async (weightRanges) => {
+    if (!selectedRegion) return;
+
+    try {
+      // 调用PUT API更新数据库
+      await apiPut(`/regions/${selectedRegion}`, {
+        weightRanges: weightRanges.map(range => ({
+          rangeName: range.label || `${range.min}-${range.max} KGS`,
+          minWeight: range.min,
+          maxWeight: range.max,
+          price: range.price,
+          isActive: range.isActive !== false
+        }))
+      });
+
+      setOperationResult({
+        type: 'success',
+        message: '价格配置已保存到数据库'
+      });
+
+      // 重新加载数据
+      const data = await apiGet(`/regions/${selectedRegion}/weight-ranges`);
+      const mapped = (data || []).map(r => ({
+        id: r.id || `${r.rangeName || ''}-${r.minWeight}-${r.maxWeight}`,
+        min: Number(r.minWeight),
+        max: Number(r.maxWeight),
+        price: Number(r.price),
+        label: r.rangeName || `${Number(r.minWeight)}-${Number(r.maxWeight)} KGS`,
+        isActive: r.isActive !== false,
+      }));
+      setApiRanges(mapped);
+
+      onPriceChange?.(weightRanges);
+    } catch (error) {
+      setOperationResult({
+        type: 'error',
+        message: `保存到数据库失败: ${error.message}`
+      });
+    }
+  };
+
+  /**
    * 保存价格配置（仅在非 API 模式下可用）
    */
   const handleSavePricing = async (weightRanges) => {
-    if (apiModeEnabled) return; // 只读模式不保存
+    // 如果开启了编辑模式，保存到数据库
+    if (editMode && apiModeEnabled) {
+      return handleSaveToDatabase(weightRanges);
+    }
+
+    if (apiModeEnabled && !editMode) return; // 只读模式不保存
     if (!selectedRegion || !currentConfig) return;
 
     try {
@@ -132,7 +178,7 @@ const RegionPriceManager = ({
         lastUpdated: new Date().toISOString()
       };
 
-      const success = saveRegionConfig(selectedRegion, updatedConfig);
+      const success = await saveRegionConfig(selectedRegion, updatedConfig);
       if (success) {
         setCurrentConfig(updatedConfig);
         setRegionConfigs(prev => ({
@@ -171,7 +217,7 @@ const RegionPriceManager = ({
       const sourceConfig = regionConfigs[sourceRegionId];
       const updatedConfig = copyRegionPricing(sourceConfig, currentConfig);
 
-      const success = saveRegionConfig(selectedRegion, updatedConfig);
+      const success = await saveRegionConfig(selectedRegion, updatedConfig);
       if (success) {
         setCurrentConfig(updatedConfig);
         setRegionConfigs(prev => ({
@@ -209,7 +255,7 @@ const RegionPriceManager = ({
         batchSettings.selectedRanges
       );
 
-      const success = saveRegionConfig(selectedRegion, updatedConfig);
+      const success = await saveRegionConfig(selectedRegion, updatedConfig);
       if (success) {
         setCurrentConfig(updatedConfig);
         setRegionConfigs(prev => ({
@@ -310,11 +356,36 @@ const RegionPriceManager = ({
             </p>
           </div>
         </div>
-        {/* 快速操作按钮（API 只读时禁用） */}
+        {/* 快速操作按钮 */}
         <div className="flex items-center gap-2">
+          {/* 表格导入按钮 */}
+          {selectedRegion && (
+            <PriceTableImport
+              regionId={selectedRegion}
+              regionName={selectedRegionInfo.name}
+              onImportComplete={async () => {
+                // 重新加载数据
+                await loadRegionConfigs();
+                // 刷新API数据
+                if (apiModeEnabled) {
+                  const data = await apiGet(`/regions/${selectedRegion}/weight-ranges`);
+                  const mapped = (data || []).map(r => ({
+                    id: r.id || `${r.rangeName || ''}-${r.minWeight}-${r.maxWeight}`,
+                    min: Number(r.minWeight),
+                    max: Number(r.maxWeight),
+                    price: Number(r.price),
+                    label: r.rangeName || `${Number(r.minWeight)}-${Number(r.maxWeight)} KGS`,
+                    isActive: r.isActive !== false,
+                  }));
+                  setApiRanges(mapped);
+                  setApiModeEnabled(mapped.length > 0);
+                }
+              }}
+            />
+          )}
           <button
             onClick={() => !apiModeEnabled && setShowBatchOperations(!showBatchOperations)}
-            disabled={apiModeEnabled}
+            disabled={apiModeEnabled && !editMode}
             className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-300 transition-colors text-sm disabled:opacity-50"
           >
             批量操作
@@ -322,11 +393,35 @@ const RegionPriceManager = ({
         </div>
       </div>
 
-      {/* API 只读提示 */}
+      {/* API 模式提示和编辑切换 */}
       {apiModeEnabled && (
         <div className="p-3 rounded-lg border bg-blue-500/10 border-blue-500/30">
-          <div className="text-sm text-blue-300">
-            当前为只读API模式：重量区间来自后端数据库，编辑功能暂不可用。
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-blue-300">
+              {editMode
+                ? '编辑模式：可以修改价格配置并保存到数据库'
+                : '只读模式：重量区间来自后端数据库，点击右侧按钮开启编辑'}
+            </div>
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                editMode
+                  ? 'bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-300'
+                  : 'bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-300'
+              }`}
+            >
+              {editMode ? (
+                <>
+                  <Database className="w-4 h-4" />
+                  保存模式
+                </>
+              ) : (
+                <>
+                  <Edit2 className="w-4 h-4" />
+                  开启编辑
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
@@ -492,8 +587,8 @@ const RegionPriceManager = ({
       {/* 重量区间价格管理 */}
       <WeightRangeManager
         weightRanges={weightRangesToUse}
-        onChange={apiModeEnabled ? undefined : handleSavePricing}
-        readOnly={apiModeEnabled}
+        onChange={apiModeEnabled && !editMode ? undefined : handleSavePricing}
+        readOnly={apiModeEnabled && !editMode}
       />
 
       {/* 操作历史 */}
