@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calculator, Package, DollarSign, MapPin } from 'lucide-react';
 import { getAllRegionConfigs } from '../utils/unifiedStorage.js';
 import { getRegionByFSA, getRegionDisplayInfo } from '../data/regionManagement.js';
+import { completeFSAData } from '../data/canadaFSAData.js';
+import { getNearestWarehouse } from '../data/warehouses.js';
 
 /**
  * 固定位置的报价单面板组件
@@ -37,6 +39,21 @@ const FixedQuotationPanel = ({ selectedFSA, onClose }) => {
       try {
         const { fsaCode, province, region } = selectedFSA;
         
+        // 获取FSA的坐标信息并计算最近的仓库
+        const fsaData = completeFSAData.find(fsa => fsa.fsa === fsaCode);
+        let warehouseInfo = null;
+        
+        if (fsaData && fsaData.lat && fsaData.lng) {
+          const nearestWarehouseResult = getNearestWarehouse({
+            lat: fsaData.lat,
+            lng: fsaData.lng
+          });
+          warehouseInfo = {
+            warehouse: nearestWarehouseResult.warehouse,
+            distance: nearestWarehouseResult.distance
+          };
+        }
+        
         // 查找FSA属于哪个区域
         const assignedRegionId = await getRegionByFSA(fsaCode);
         
@@ -45,7 +62,8 @@ const FixedQuotationPanel = ({ selectedFSA, onClose }) => {
             type: 'unavailable',
             fsaCode,
             province,
-            region
+            region,
+            warehouseInfo
           });
           return;
         }
@@ -62,7 +80,8 @@ const FixedQuotationPanel = ({ selectedFSA, onClose }) => {
             province,
             region,
             regionInfo,
-            regionId: assignedRegionId
+            regionId: assignedRegionId,
+            warehouseInfo
           });
           return;
         }
@@ -73,7 +92,8 @@ const FixedQuotationPanel = ({ selectedFSA, onClose }) => {
           province,
           region,
           regionInfo,
-          regionConfig
+          regionConfig,
+          warehouseInfo
         });
 
       } catch (error) {
@@ -191,6 +211,36 @@ const FixedQuotationPanel = ({ selectedFSA, onClose }) => {
                     <span className="text-white font-semibold">{quotationData.regionInfo.name}</span>
                   </div>
                 </div>
+
+                {/* 推荐始发地信息 */}
+                {quotationData.warehouseInfo && (
+                  <div className="p-3 rounded-lg bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-indigo-500/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">{quotationData.warehouseInfo.warehouse.icon}</span>
+                      <h4 className="text-white font-medium">推荐始发地</h4>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300 text-sm">仓库:</span>
+                        <span className="text-indigo-300 font-semibold">
+                          {quotationData.warehouseInfo.warehouse.name}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300 text-sm">距离:</span>
+                        <span className="text-yellow-400 font-semibold">
+                          {quotationData.warehouseInfo.distance} 公里
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300 text-sm">FSA:</span>
+                        <span className="text-gray-400 text-sm">
+                          {quotationData.warehouseInfo.warehouse.fsa}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* 常用价格 */}
                 {topRanges.length > 0 && (

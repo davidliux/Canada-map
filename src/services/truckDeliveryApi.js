@@ -11,12 +11,22 @@ const TRUCK_API = `${API_BASE}/truck-delivery`;
  */
 async function apiRequest(url, options = {}) {
   try {
+    // 尝试从 localStorage 获取认证令牌（可选）
+    const token = localStorage.getItem('accessToken');
+
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    // 如果有令牌，添加到请求头
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
 
     const data = await response.json();

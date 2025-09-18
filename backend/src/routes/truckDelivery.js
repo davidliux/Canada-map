@@ -742,35 +742,59 @@ router.get('/zones/:id', async (req, res) => {
     const { id } = req.params;
 
     // 修改为使用板数价格表 skid_pricing
-    // 注意：板数价格表中的 zone_id 使用 "区域1", "区域2" 等格式
-    // 需要通过 level 字段来匹配
+    // 同时包含FSA分组数据以确保首次加载完整
     const query = `
       SELECT
         z.*,
         c.name as city_name,
         c.province,
-        COALESCE(json_agg(
-          json_build_object(
-            'skid_count', sp.skid_count,
-            'price', sp.price,
-            'currency', sp.currency
-          ) ORDER BY sp.skid_count
-        ) FILTER (WHERE sp.id IS NOT NULL), '[]'::json) AS prices
+        COALESCE((
+          SELECT json_agg(price_obj ORDER BY price_obj::text)
+          FROM (
+            SELECT DISTINCT jsonb_build_object(
+              'skid_count', sp.skid_count,
+              'price', sp.price,
+              'currency', sp.currency
+            ) AS price_obj
+            FROM skid_pricing sp
+            WHERE sp.id IS NOT NULL
+              AND (sp.zone_id = z.id
+                OR sp.zone_id = z.name
+                OR sp.zone_id = '区域' || z.level::text
+                OR sp.zone_id = 'Zone ' || z.level::text)
+              AND sp.city_id = c.id
+              AND sp.is_active = true
+          ) distinct_prices
+        ), '[]'::json) AS prices,
+        COALESCE((
+          SELECT json_agg(
+            json_build_object(
+              'id', fg.id,
+              'name', fg.name,
+              'fsa_codes', fg.fsa_codes,
+              'custom_pricing', fg.custom_pricing,
+              'display_color', fg.display_color
+            ) ORDER BY fg.name
+          )
+          FROM truck_zone_fsa_groups fg
+          WHERE fg.zone_id = z.id
+        ), '[]'::json) AS fsa_groups,
+        -- 计算汇总的FSA代码（从分组聚合）
+        CASE
+          WHEN EXISTS (SELECT 1 FROM truck_zone_fsa_groups WHERE zone_id = z.id) THEN
+            (
+              SELECT array_agg(fsa_code ORDER BY fsa_code)
+              FROM (
+                SELECT DISTINCT unnest(fsa_codes) as fsa_code
+                FROM truck_zone_fsa_groups
+                WHERE zone_id = z.id
+              ) fsas
+            )
+          ELSE z.fsa_codes
+        END AS calculated_fsa_codes
       FROM truck_delivery_zones z
       JOIN truck_delivery_cities c ON z.city_id = c.id
-      LEFT JOIN skid_pricing sp ON (
-                                      sp.zone_id = z.id
-                                      OR sp.zone_id = z.name
-                                      OR sp.zone_id = '区域' || z.level::text
-                                      OR sp.zone_id = 'Zone ' || z.level::text
-                                    )
-                                 AND sp.city_id = c.id
-                                 AND sp.is_active = true
       WHERE z.id = $1
-      GROUP BY z.id, z.city_id, z.name, z.level, z.fsa_codes, z.color,
-               z.display_color, z.active_drivers, z.daily_capacity, z.is_active,
-               z.created_at, z.updated_at, z.version, z.boundaries, z.coverage_area,
-               z.coverage_population, z.avg_delivery_time, z.metadata, c.name, c.province
     `;
     
     const result = await pool.query(query, [id]);

@@ -4,9 +4,10 @@ import MainLayout from '../layouts/MainLayout';
 import FSAManagementLayout from '../layouts/FSAManagementLayout';
 import TruckManagementLayout from '../layouts/TruckManagementLayout';
 import TruckDeliveryLayout from '../layouts/TruckDeliveryLayout';
+import PrivateRoute from '../components/PrivateRoute';
 
 // Hub Pages
-import DashboardHub from '../pages/Dashboards/DashboardHub';
+import DashboardHub from '../pages/DashboardHub';
 import ManagementHub from '../pages/Management/ManagementHub';
 
 // Dashboard Pages
@@ -34,9 +35,18 @@ const ProviderManagement = lazy(() => import('../pages/Providers'));
 import RegionsPage from '../pages/TruckDelivery/RegionsPage';
 import PricingConfigPageV3 from '../pages/TruckDelivery/PricingConfigPageV3';
 
-// Test Pages
-import TestSkidPricing from '../pages/TestSkidPricing';
-import TestFSAGroups from '../pages/TestFSAGroups';
+// Import Auth pages
+import Login from '../pages/Auth/Login';
+import Register from '../pages/Auth/Register';
+
+// Import Account Management
+import AccountManagement from '../pages/Settings/AccountManagement';
+import AccountSettings from '../pages/Settings/AccountSettings';
+
+// Import Permission Management
+import PermissionManager from '../components/permissions/PermissionManager';
+
+
 
 const router = createBrowserRouter([
   {
@@ -53,12 +63,12 @@ const router = createBrowserRouter([
         element: <DashboardHub />,
       },
       {
-        path: 'dashboards/fsa',
+        path: 'dashboard',
         element: <FSADashboard />,
       },
       {
-        path: 'dashboards/truck-delivery',
-        element: <TruckDeliveryDashboard />,  // 使用正确的TruckDeliveryDashboard组件
+        path: 'truck-delivery/dashboard',
+        element: <TruckDeliveryDashboard />,
       },
       // Management Routes
       {
@@ -130,27 +140,51 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      // Test Routes
-      {
-        path: 'test-skid-pricing',
-        element: <TestSkidPricing />,
-      },
-      {
-        path: 'test-fsa-groups',
-        element: <TestFSAGroups />,
-      },
-      {
-        path: 'test-data-loading',
-        element: (
-          <Suspense fallback={<div className="flex items-center justify-center h-screen">加载中...</div>}>
-            {React.createElement(lazy(() => import('../pages/TestDataLoading')))}
-          </Suspense>
-        ),
-      },
-      // Settings Route
+
+      // Settings Routes
       {
         path: 'settings',
         element: <Settings />,
+      },
+      {
+        path: 'settings/account',
+        element: (
+          <PrivateRoute>
+            <AccountSettings />
+          </PrivateRoute>
+        ),
+      },
+      // Account Management Route (只有 SUPER_ADMIN 可访问)
+      {
+        path: 'settings/account-management',
+        element: (
+          <PrivateRoute requiredRoles={['SUPER_ADMIN']}>
+            <AccountManagement />
+          </PrivateRoute>
+        ),
+      },
+      // Permission Management Route (只有 ADMIN 和 SUPER_ADMIN 可访问)
+      {
+        path: 'settings/permissions',
+        element: (
+          <PrivateRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+            <PermissionManager />
+          </PrivateRoute>
+        ),
+      },
+    ],
+  },
+  // Auth Routes (不需要认证)
+  {
+    path: '/auth',
+    children: [
+      {
+        path: 'login',
+        element: <Login />,
+      },
+      {
+        path: 'register',
+        element: <Register />,
       },
     ],
   },

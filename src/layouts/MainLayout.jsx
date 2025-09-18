@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Map, 
-  Settings, 
-  Menu, 
-  X, 
+import {
+  Map,
+  Settings,
+  Menu,
+  X,
   Home,
   Package,
   DollarSign,
@@ -19,18 +19,29 @@ import {
   Truck,
   Monitor,
   Sliders,
-  ChevronLeft
+  ChevronLeft,
+  LogOut,
+  User
 } from 'lucide-react';
 import AnimatedSearchBox from '../components/AnimatedSearchBox';
 import FilterButtonGroup from '../components/FilterButtonGroup';
+import Logo from '../components/Logo';
+import { useAuth } from '../contexts/AuthContext';
 
 const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState([]);
   const [selectedFilters, setSelectedFilters] = useState([]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/auth/login');
+  };
 
   const navigation = [
     { name: '仪表板', href: '/dashboards', icon: Monitor },
@@ -123,14 +134,11 @@ const MainLayout = () => {
       `}>
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex h-16 items-center justify-between px-4 bg-gray-900">
-            <div className="flex items-center space-x-2">
-              <Package className="w-8 h-8 text-blue-500" />
-              <span className="text-white font-bold text-lg">加拿大邮政系统</span>
-            </div>
+          <div className="h-24 px-2 py-2 bg-gray-900 relative">
+            <Logo size="sidebar" className="h-full" />
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-400 hover:text-white"
+              className="lg:hidden text-gray-400 hover:text-white absolute top-4 right-4 z-10"
             >
               <X className="w-6 h-6" />
             </button>
@@ -249,11 +257,44 @@ const MainLayout = () => {
                 <FileText className="w-5 h-5" />
               </button>
               <div className="h-8 w-px bg-gray-700" />
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">A</span>
-                </div>
-                <span className="text-sm text-gray-300">管理员</span>
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-sm text-gray-300">{user?.username || '管理员'}</span>
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-gray-800 ring-1 ring-black ring-opacity-5">
+                    <div className="py-1">
+                      <div className="px-4 py-2 text-sm text-gray-400 border-b border-gray-700">
+                        <div className="font-medium">{user?.username}</div>
+                        <div className="text-xs">{user?.role === 'SUPER_ADMIN' ? '超级管理员' : user?.role === 'ADMIN' ? '管理员' : '用户'}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigate('/settings/account');
+                          setShowUserMenu(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+                      >
+                        <User className="inline w-4 h-4 mr-2" />
+                        账户设置
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
+                      >
+                        <LogOut className="inline w-4 h-4 mr-2" />
+                        退出登录
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

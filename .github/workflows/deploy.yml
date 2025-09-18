@@ -1,0 +1,82 @@
+name: Deploy to Aliyun Server
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build and Save Docker Images
+      run: |
+        # 构建前端镜像
+        docker build -f Dockerfile.frontend -t map-frontend:latest .
+
+        # 构建后端镜像
+        docker build -f backend/Dockerfile -t map-backend:latest ./backend
+
+        # 保存镜像为 tar 文件
+        docker save map-frontend:latest -o frontend.tar
+        docker save map-backend:latest -o backend.tar
+
+    - name: Deploy to Server
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          # 创建项目目录
+          mkdir -p ~/map-delivery
+          cd ~/map-delivery
+
+          # 停止旧容器（如果存在）
+          docker-compose down || true
+
+    - name: Copy Files to Server
+      uses: appleboy/scp-action@v0.1.5
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        source: "docker-compose.yml,nginx.conf,frontend.tar,backend.tar,.env.production"
+        target: "~/map-delivery/"
+
+    - name: Start Application
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: 22
+        script: |
+          cd ~/map-delivery
+
+          # 加载 Docker 镜像
+          docker load -i frontend.tar
+          docker load -i backend.tar
+
+          # 设置环境变量
+          cp .env.production .env
+
+          # 启动应用
+          docker-compose up -d
+
+          # 清理临时文件
+          rm -f frontend.tar backend.tar
+
+          # 检查容器状态
+          docker-compose ps
+
+          echo "Deployment completed successfully!"

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { completeFSAData } from '../data/completeFSAData';
 import { getRegionFSAGroups } from '../utils/unifiedStorage';
+import { WAREHOUSES } from '../data/warehouses';
 
 // 地图控制组件 - 增强版，支持FSA边界自动缩放
 const MapController = ({ highlightedFSAs, cityView, mapData }) => {
@@ -557,6 +558,139 @@ const TruckDeliveryMap = ({
         )}
 
         {/* 已移除旧的FSA圆点渲染 - 现在使用完整的多边形边界 */}
+
+        {/* 添加仓库标记 */}
+        {Object.values(WAREHOUSES).map(warehouse => {
+          // 为黑暗系主题创建仓库图标
+          const warehouseIcon = L.divIcon({
+            className: 'warehouse-marker-dark',
+            html: `
+              <div style="
+                position: relative;
+                width: 50px;
+                height: 60px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+              ">
+                <div style="
+                  background: linear-gradient(135deg, ${warehouse.color}DD, ${warehouse.color}99);
+                  border: 2px solid rgba(255, 255, 255, 0.2);
+                  border-radius: 50%;
+                  width: 40px;
+                  height: 40px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 20px ${warehouse.color}66;
+                  font-size: 20px;
+                  backdrop-filter: blur(8px);
+                ">
+                  ${warehouse.icon}
+                </div>
+                <div style="
+                  background: rgba(17, 24, 39, 0.95);
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  border-radius: 4px;
+                  padding: 2px 6px;
+                  margin-top: 4px;
+                  font-size: 11px;
+                  font-weight: bold;
+                  color: white;
+                  white-space: nowrap;
+                  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+                ">
+                  ${warehouse.shortName}
+                </div>
+              </div>
+            `,
+            iconSize: [50, 60],
+            iconAnchor: [25, 60],
+            popupAnchor: [0, -60]
+          });
+
+          return (
+            <Marker
+              key={warehouse.id}
+              position={[warehouse.coordinates.lat, warehouse.coordinates.lng]}
+              icon={warehouseIcon}
+            >
+              <Popup
+                className="warehouse-popup-dark"
+                closeButton={true}
+              >
+                <div style={{
+                  background: 'linear-gradient(135deg, #1f2937, #111827)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  minWidth: '260px',
+                  color: 'white',
+                  fontFamily: 'system-ui, -apple-system, sans-serif'
+                }}>
+                  <div style={{
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                    paddingBottom: '12px',
+                    marginBottom: '12px'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 4px 0',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      color: warehouse.color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span style={{ fontSize: '24px' }}>{warehouse.icon}</span>
+                      {warehouse.name}
+                    </h3>
+                    <p style={{
+                      margin: '0',
+                      fontSize: '12px',
+                      color: 'rgba(156, 163, 175, 1)',
+                      fontStyle: 'italic'
+                    }}>
+                      {warehouse.fullName}
+                    </p>
+                  </div>
+                  <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                    <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: 'rgba(156, 163, 175, 1)' }}>FSA区域:</span>
+                      <span style={{
+                        background: 'rgba(59, 130, 246, 0.2)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontWeight: 'bold',
+                        border: '1px solid rgba(59, 130, 246, 0.3)'
+                      }}>{warehouse.fsa}</span>
+                    </div>
+                    <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: 'rgba(156, 163, 175, 1)' }}>服务区域:</span>
+                      <span>{warehouse.serviceAreas.join(', ')}</span>
+                    </div>
+                    <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: 'rgba(156, 163, 175, 1)' }}>时区:</span>
+                      <span>{warehouse.timezone}</span>
+                    </div>
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '8px',
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      borderRadius: '4px',
+                      borderLeft: `3px solid ${warehouse.color}`,
+                      fontSize: '12px',
+                      color: 'rgba(209, 213, 219, 1)'
+                    }}>
+                      <strong>描述:</strong> {warehouse.description}
+                    </div>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
 
         <MapController
           highlightedFSAs={highlightedFSAs}

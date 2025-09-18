@@ -7,6 +7,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/pgDatabase');
 const { v4: uuidv4 } = require('uuid');
+const { verifyToken, optionalAuth } = require('../middleware/auth');
+const { checkQueryLimit, checkModuleAccess } = require('../middleware/queryLimit');
 
 // ==================== 价格查询 API ====================
 
@@ -20,7 +22,7 @@ const { v4: uuidv4 } = require('uuid');
  * - group_id: 分组ID（可选）
  * - fsa_code: FSA代码（可选）
  */
-router.get('/query', async (req, res) => {
+router.get('/query', optionalAuth, checkQueryLimit('PRICE_QUERY'), async (req, res) => {
   const { city_id, zone_id, group_id, fsa_code } = req.query;
 
   if (!city_id) {
@@ -94,7 +96,7 @@ router.get('/query', async (req, res) => {
  * - city_id, zone_id, group_id, fsa_code: 查询参数（config_id为空时使用）
  * - skid_count: 托盘数量
  */
-router.post('/calculate', async (req, res) => {
+router.post('/calculate', optionalAuth, checkQueryLimit('PRICE_QUERY'), async (req, res) => {
   const { config_id, city_id, zone_id, group_id, fsa_code, skid_count } = req.body;
 
   if (!skid_count || skid_count < 1) {

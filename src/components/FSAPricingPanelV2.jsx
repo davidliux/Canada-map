@@ -24,10 +24,13 @@ import {
   Truck,
   AlertCircle,
   CheckCircle,
-  Zap
+  Zap,
+  Navigation
 } from 'lucide-react';
 import pricingServiceV2 from '../services/pricingServiceV2';
 import { getRegionConfig, getFSAGroup } from '../utils/unifiedStorage';
+import { getNearestWarehouse } from '../data/warehouses';
+import { completeFSAData } from '../data/canadaFSAData';
 
 const FSAPricingPanelV2 = ({
   isOpen,
@@ -45,6 +48,7 @@ const FSAPricingPanelV2 = ({
   const [pricingConfig, setPricingConfig] = useState(null);
   const [calculatedPrice, setCalculatedPrice] = useState(null);
   const [error, setError] = useState(null);
+  const [warehouseInfo, setWarehouseInfo] = useState(null); // 仓库距离信息
 
   // 加载价格配置
   useEffect(() => {
@@ -84,6 +88,18 @@ const FSAPricingPanelV2 = ({
           // 使用默认配置
           const defaultPricing = pricingServiceV2.getDefaultPricing(cityId);
           setPricingConfig(defaultPricing);
+        }
+
+        // 4. 计算仓库距离
+        const fsaData = completeFSAData.find(item => item.fsa === fsaCode);
+        if (fsaData && fsaData.lat && fsaData.lng) {
+          const nearestWarehouseResult = getNearestWarehouse({
+            lat: fsaData.lat,
+            lng: fsaData.lng
+          });
+          setWarehouseInfo(nearestWarehouseResult);
+        } else {
+          setWarehouseInfo(null);
         }
 
       } catch (err) {
@@ -421,6 +437,59 @@ const FSAPricingPanelV2 = ({
                       </p>
                     </div>
                   </div>
+
+                  {/* 仓库距离信息 */}
+                  {warehouseInfo && warehouseInfo.warehouse && (
+                    <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-lg p-3 border border-purple-500/30 mb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Navigation className="w-4 h-4 text-purple-400" />
+                        <span className="text-gray-300 text-sm font-semibold">推荐始发地</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-800/60 rounded-lg p-2.5 border border-gray-700/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{
+                                backgroundColor: warehouseInfo.warehouse.color,
+                                boxShadow: `0 0 8px ${warehouseInfo.warehouse.color}66`
+                              }}
+                            ></div>
+                            <span className="text-gray-400 text-xs">仓库</span>
+                          </div>
+                          <p className="text-white font-bold text-sm">
+                            {warehouseInfo.warehouse.name}
+                          </p>
+                          <p className="text-gray-500 text-xs mt-0.5">
+                            {warehouseInfo.warehouse.fsa}
+                          </p>
+                        </div>
+
+                        <div className="bg-gray-800/60 rounded-lg p-2.5 border border-gray-700/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <MapPin className="w-3 h-3 text-cyan-400" />
+                            <span className="text-gray-400 text-xs">距离</span>
+                          </div>
+                          <p className="text-white font-bold text-sm">
+                            {warehouseInfo.distance} 公里
+                          </p>
+                          <p className="text-gray-500 text-xs mt-0.5">
+                            直线距离
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 仓库服务描述 */}
+                      <div className="mt-2 pt-2 border-t border-gray-700/50">
+                        <p className="text-xs text-gray-400">
+                          <span className="text-gray-500">服务区域: </span>
+                          <span className="text-gray-300">
+                            {warehouseInfo.warehouse.serviceAreas.join(', ')}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 价格配置来源 */}
                   {pricingConfig && configLevelInfo && (

@@ -7,7 +7,7 @@ import { useEffect, useCallback } from 'react';
  */
 export const useKeyboardShortcuts = (shortcuts = {}, enabled = true) => {
   const handleKeyDown = useCallback((event) => {
-    if (!enabled) return;
+    if (!enabled || !event.key) return;
 
     // 构建快捷键字符串
     const key = event.key.toLowerCase();

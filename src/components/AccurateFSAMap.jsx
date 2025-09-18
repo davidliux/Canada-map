@@ -1,12 +1,55 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap, Marker, Popup } from 'react-leaflet';
 import { motion } from 'framer-motion';
 import { MapPin, Info, Database, CheckCircle, Plus, Minus, X } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
+// 创建仓库图标
+const createWarehouseIcon = (warehouse) => {
+  return L.divIcon({
+    className: 'warehouse-marker',
+    html: `
+      <div style="
+        background: ${warehouse.color};
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 4px solid #ffffff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+        font-size: 24px;
+        position: relative;
+      ">
+        <span style="filter: none; z-index: 10;">${warehouse.icon}</span>
+        <div style="
+          position: absolute;
+          bottom: -8px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: ${warehouse.color};
+          color: white;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: bold;
+          white-space: nowrap;
+          border: 1px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        ">${warehouse.shortName}</div>
+      </div>
+    `,
+    iconSize: [50, 60],
+    iconAnchor: [25, 30],
+    popupAnchor: [0, -30]
+  });
+};
+
 // 可配送的FSA列表和地图数据
 import { completeFSAData, getFSAGeoJSON } from '../data/canadaFSAData.js';
+import { WAREHOUSES, getNearestWarehouse, calculateDistance } from '../data/warehouses.js';
 import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerator.js';
 import { getRegionFSAs, getRegionConfig } from '../utils/unifiedStorage';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
@@ -1339,6 +1382,86 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', completeFSAData
                     onEachFeature={onEachFeature}
                   />
                 )}
+                
+                {/* 渲染仓库标记 */}
+                {Object.values(WAREHOUSES).map(warehouse => (
+                  <Marker
+                    key={warehouse.id}
+                    position={[warehouse.coordinates.lat, warehouse.coordinates.lng]}
+                    icon={createWarehouseIcon(warehouse)}
+                  >
+                    <Popup className="warehouse-popup">
+                      <div style={{
+                        padding: '16px',
+                        minWidth: '280px',
+                        background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}>
+                        <h3 style={{
+                          fontSize: '20px',
+                          fontWeight: 'bold',
+                          marginBottom: '12px',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ fontSize: '24px' }}>{warehouse.icon}</span>
+                          {warehouse.name}
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>FSA代码:</span>
+                            <span style={{ 
+                              color: '#FCD34D',
+                              fontWeight: '600',
+                              fontSize: '16px',
+                              padding: '2px 8px',
+                              background: 'rgba(252, 211, 77, 0.1)',
+                              borderRadius: '4px'
+                            }}>{warehouse.fsa}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>服务区域:</span>
+                            <span style={{ 
+                              color: '#60A5FA',
+                              fontWeight: '600',
+                              fontSize: '14px'
+                            }}>{warehouse.serviceAreas.join(', ')}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>时区:</span>
+                            <span style={{ color: '#D1D5DB', fontSize: '14px' }}>
+                              {warehouse.timezone.split('/')[1]}
+                            </span>
+                          </div>
+                          <div style={{ 
+                            marginTop: '12px',
+                            paddingTop: '12px',
+                            borderTop: '1px solid rgba(156, 163, 175, 0.2)'
+                          }}>
+                            <div style={{ color: '#9CA3AF', fontSize: '12px', marginBottom: '4px' }}>机场全称:</div>
+                            <div style={{ color: '#E5E7EB', fontSize: '13px' }}>
+                              {warehouse.fullName}
+                            </div>
+                          </div>
+                          <div style={{ 
+                            padding: '8px',
+                            background: `linear-gradient(135deg, ${warehouse.color}20, ${warehouse.color}10)`,
+                            borderRadius: '6px',
+                            border: `1px solid ${warehouse.color}40`,
+                            marginTop: '8px'
+                          }}>
+                            <p style={{ color: '#F3F4F6', fontSize: '13px', margin: 0 }}>
+                              {warehouse.description}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
               </>
             );
           })()}

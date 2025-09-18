@@ -20,8 +20,14 @@ import {
   Loader2,
   AlertCircle,
   Truck,
-  Activity
+  Activity,
+  Shield,
+  MapPin,
+  BarChart3
 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 const TruckDeliveryDashboard = () => {
   const navigate = useNavigate();
@@ -68,19 +74,27 @@ const TruckDeliveryDashboard = () => {
               if (cityDetail.zones && cityDetail.zones.length > 0) {
                 processedZones = await Promise.all(cityDetail.zones.map(async (zone) => {
                   let calculatedFSAs = [];
-                  try {
-                    const groups = await getRegionFSAGroups(zone.id);
-                    if (groups && groups.length > 0) {
-                      const allFSAs = new Set();
-                      groups.forEach(group => {
-                        const fsaCodes = group.fsaCodes || [];
-                        fsaCodes.forEach(fsa => allFSAs.add(fsa));
-                      });
-                      calculatedFSAs = Array.from(allFSAs).sort();
-                      console.log(`区域 ${zone.name || zone.id} 从分组加载了 ${calculatedFSAs.length} 个FSA`);
+
+                  // 优先使用后端计算的FSA数据
+                  if (zone.calculated_fsa_codes && zone.calculated_fsa_codes.length > 0) {
+                    calculatedFSAs = zone.calculated_fsa_codes;
+                    console.log(`区域 ${zone.name || zone.id} 使用后端计算的 ${calculatedFSAs.length} 个FSA`);
+                  } else {
+                    // 如果后端没有计算数据，尝试从分组加载
+                    try {
+                      const groups = await getRegionFSAGroups(zone.id);
+                      if (groups && groups.length > 0) {
+                        const allFSAs = new Set();
+                        groups.forEach(group => {
+                          const fsaCodes = group.fsaCodes || [];
+                          fsaCodes.forEach(fsa => allFSAs.add(fsa));
+                        });
+                        calculatedFSAs = Array.from(allFSAs).sort();
+                        console.log(`区域 ${zone.name || zone.id} 从分组加载了 ${calculatedFSAs.length} 个FSA`);
+                      }
+                    } catch (err) {
+                      console.error(`加载区域 ${zone.name || zone.id} 的FSA分组失败:`, err);
                     }
-                  } catch (err) {
-                    console.error(`加载区域 ${zone.name || zone.id} 的FSA分组失败:`, err);
                   }
 
                   // 使用计算出的FSA或原始数据
@@ -219,19 +233,27 @@ const TruckDeliveryDashboard = () => {
         regions = await Promise.all(zones.map(async (zone) => {
           // 尝试从FSA分组中获取实际的FSA列表
           let calculatedFSAs = [];
-          try {
-            const groups = await getRegionFSAGroups(zone.id);
-            if (groups && groups.length > 0) {
-              const allFSAs = new Set();
-              groups.forEach(group => {
-                const fsaCodes = group.fsaCodes || [];
-                fsaCodes.forEach(fsa => allFSAs.add(fsa));
-              });
-              calculatedFSAs = Array.from(allFSAs).sort();
-              console.log(`区域 ${zone.name} 从分组加载了 ${calculatedFSAs.length} 个FSA`);
+
+          // 优先使用后端计算的数据
+          if (zone.calculated_fsa_codes && zone.calculated_fsa_codes.length > 0) {
+            calculatedFSAs = zone.calculated_fsa_codes;
+            console.log(`区域 ${zone.name} 使用后端计算的 ${calculatedFSAs.length} 个FSA`);
+          } else {
+            // 如果后端没有计算数据，尝试从分组加载
+            try {
+              const groups = await getRegionFSAGroups(zone.id);
+              if (groups && groups.length > 0) {
+                const allFSAs = new Set();
+                groups.forEach(group => {
+                  const fsaCodes = group.fsaCodes || [];
+                  fsaCodes.forEach(fsa => allFSAs.add(fsa));
+                });
+                calculatedFSAs = Array.from(allFSAs).sort();
+                console.log(`区域 ${zone.name} 从分组加载了 ${calculatedFSAs.length} 个FSA`);
+              }
+            } catch (err) {
+              console.error(`加载区域 ${zone.name} 的FSA分组失败:`, err);
             }
-          } catch (err) {
-            console.error(`加载区域 ${zone.name} 的FSA分组失败:`, err);
           }
 
           // 如果从分组计算出了FSA，使用计算结果；否则使用原始数据
@@ -275,23 +297,44 @@ const TruckDeliveryDashboard = () => {
       if (!specificFSA && regions && regions.length > 0) {
         // 对于每个区域，尝试加载其FSA分组并更新fsaCodes
         for (const region of regions) {
-          try {
-            const groups = await getRegionFSAGroups(region.id);
-            if (groups && groups.length > 0) {
-              const fsaSet = new Set();
-              groups.forEach(group => {
-                const groupFSAs = group.fsaCodes || [];
-                groupFSAs.forEach(fsa => fsaSet.add(fsa));
-              });
-              const allFSAs = Array.from(fsaSet).sort();
-              if (allFSAs.length > 0) {
-                region.fsaCodes = allFSAs;
-                region.fsa_codes = allFSAs;
-                console.log(`区域 ${region.name} 从分组加载了 ${allFSAs.length} 个FSA`);
+          // 优先使用后端计算的数据
+          if (region.calculated_fsa_codes && region.calculated_fsa_codes.length > 0) {
+            region.fsaCodes = region.calculated_fsa_codes;
+            region.fsa_codes = region.calculated_fsa_codes;
+            console.log(`区域 ${region.name} 使用后端计算的 ${region.calculated_fsa_codes.length} 个FSA`);
+          } else {
+            // 如果后端没有计算数据，尝试从FSA分组加载
+            try {
+              const groups = await getRegionFSAGroups(region.id);
+              if (groups && groups.length > 0) {
+                const fsaSet = new Set();
+                groups.forEach(group => {
+                  const groupFSAs = group.fsaCodes || [];
+                  groupFSAs.forEach(fsa => fsaSet.add(fsa));
+                });
+                const allFSAs = Array.from(fsaSet).sort();
+                if (allFSAs.length > 0) {
+                  region.fsaCodes = allFSAs;
+                  region.fsa_codes = allFSAs;
+                  console.log(`区域 ${region.name} 从分组加载了 ${allFSAs.length} 个FSA`);
+                }
+              }
+            } catch (err) {
+              console.error(`加载区域 ${region.name} 的FSA分组失败:`, err);
+              // 如果FSA数据为空，尝试重新加载
+              if (!region.fsaCodes || region.fsaCodes.length === 0) {
+                try {
+                  const zoneDetail = await zoneApi.getById(region.id);
+                  if (zoneDetail) {
+                    region.fsaCodes = zoneDetail.calculated_fsa_codes || zoneDetail.fsa_codes || [];
+                    region.fsa_codes = region.fsaCodes;
+                    console.log(`区域 ${region.name} 重试加载成功: ${region.fsaCodes.length} 个FSA`);
+                  }
+                } catch (retryErr) {
+                  console.error(`区域 ${region.name} 重试加载失败:`, retryErr);
+                }
               }
             }
-          } catch (err) {
-            console.error(`加载区域 ${region.name} 的FSA分组失败:`, err);
           }
         }
 
@@ -517,41 +560,54 @@ const TruckDeliveryDashboard = () => {
       <div className="bg-gray-800 border-b border-gray-700 px-6 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => navigate('/dashboards')}
-              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-              title="返回仪表板选择"
+              className="hover:bg-gray-700"
+              title="返回仪表板中心"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-400" />
-            </button>
-            <Truck className="w-8 h-8 text-blue-500" />
-            <div>
-              <h1 className="text-xl font-bold text-white">卡车派送数据大屏</h1>
-              <p className="text-xs text-gray-400">
-                实时配送网络监控 · {new Date().toLocaleString('zh-CN')}
-              </p>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
+                <Truck className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">卡车配送仪表板</h1>
+                <p className="text-xs text-gray-400">
+                  实时监控城市配送网络
+                </p>
+              </div>
             </div>
           </div>
           <div className="flex items-center space-x-4">
             {selectedCity && (
-              <div className="flex items-center space-x-3 bg-gray-700/50 px-4 py-2 rounded-lg">
+              <Badge
+                variant="outline"
+                className="px-4 py-2 border-gray-700 bg-gray-800/50"
+              >
                 <div
-                  className="w-3 h-3 rounded-full"
+                  className="w-3 h-3 rounded-full mr-2"
                   style={{ backgroundColor: selectedCity.themeColor || selectedCity.theme_color || '#60A5FA' }}
                 />
-                <span className="text-sm text-white">{selectedCity.name}</span>
+                <span className="text-sm text-white mr-2">{selectedCity.name}</span>
                 <button
                   onClick={handleClearSelection}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-400 hover:text-white ml-1"
                 >
                   ×
                 </button>
-              </div>
+              </Badge>
             )}
-            <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-green-400 animate-pulse" />
-              <span className="text-sm text-gray-300">实时更新</span>
-            </div>
+            <Badge variant="outline" className="border-gray-700 text-gray-300">
+              <Activity className="w-3 h-3 mr-1 text-green-500" />
+              实时数据
+            </Badge>
+            <Badge variant="outline" className="border-gray-700 text-gray-300">
+              <Shield className="w-3 h-3 mr-1 text-blue-500" />
+              已认证
+            </Badge>
           </div>
         </div>
       </div>
@@ -567,12 +623,20 @@ const TruckDeliveryDashboard = () => {
 
       {/* 错误提示 */}
       {error && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-red-900/90 text-white px-6 py-3 rounded-lg shadow-xl z-50">
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50"
+        >
+          <Card className="border-red-900/50 bg-red-900/90 text-white">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <AlertCircle className="w-5 h-5" />
+                <span>{error}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {/* 主要内容区 */}

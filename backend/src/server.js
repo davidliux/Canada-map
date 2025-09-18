@@ -36,9 +36,21 @@ app.get('/api/v1/health', (req, res) => {
   res.json({ success: true, data: { status: 'ok' } });
 });
 
-// 添加卡车配送路由
+// 添加认证路由
+const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
+const permissionsRoutes = require('./routes/permissions');
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/permissions', permissionsRoutes);
+
+// 导入权限中间件
+const { checkModuleAccess } = require('./middleware/queryLimit');
+const { optionalAuth } = require('./middleware/auth');
+
+// 添加卡车配送路由（使用可选认证，允许公开访问）
 const truckDeliveryRoutes = require('./routes/truckDelivery');
-app.use('/api/v1/truck-delivery', truckDeliveryRoutes);
+app.use('/api/v1/truck-delivery', optionalAuth, truckDeliveryRoutes);
 
 // 添加动态定价路由（使用模拟版本）
 const truckPricingRoutes = require('./routes/truckPricingMock');

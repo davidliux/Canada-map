@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import router from './router';
 import ErrorBoundary from './components/ErrorBoundary';
+import { AuthProvider } from './contexts/AuthContext';
 import { useKeyboardShortcuts, createShortcuts } from './hooks/useKeyboardShortcuts';
 import { performanceMonitor } from './utils/performanceOptimizer';
 import compatLayer from './utils/unifiedStorageCompat'; // 导入兼容层
@@ -56,7 +57,9 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <RouterProvider router={router} />
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

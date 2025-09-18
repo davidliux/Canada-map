@@ -16,6 +16,8 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "node prisma/seed.js",
     "db:setup": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed",
+    "admin:setup": "node src/scripts/setupDefaultAdmin.js",
+    "admin:create": "node src/scripts/createSuperAdmin.js",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "format": "prettier --write src/**/*.js",

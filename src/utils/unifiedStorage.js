@@ -150,12 +150,17 @@ export const getRegionConfig = async (regionId) => {
           // 优先使用zone直接的fsa_codes字段，如果不存在或为空，则从分组计算
           let regionFSAs = [];
 
-          // 方法1：直接使用zone的fsa_codes字段
-          if (zone.fsa_codes && Array.isArray(zone.fsa_codes) && zone.fsa_codes.length > 0) {
+          // 方法1：使用后端计算的FSA数据（最准确）
+          if (zone.calculated_fsa_codes && Array.isArray(zone.calculated_fsa_codes) && zone.calculated_fsa_codes.length > 0) {
+            regionFSAs = zone.calculated_fsa_codes;
+            console.log(`📊 区域 ${regionId} 使用后端计算FSA数据: ${regionFSAs.length} 个FSA`);
+          }
+          // 方法2：直接使用zone的fsa_codes字段
+          else if (zone.fsa_codes && Array.isArray(zone.fsa_codes) && zone.fsa_codes.length > 0) {
             regionFSAs = zone.fsa_codes;
             console.log(`📊 区域 ${regionId} 使用直接FSA数据: ${regionFSAs.length} 个FSA`);
           }
-          // 方法2：从fsa_groups计算
+          // 方法3：从fsa_groups计算
           else if (fsaGroups && fsaGroups.length > 0) {
             regionFSAs = calculateRegionFSAsFromGroups(fsaGroups);
             if (regionFSAs.length > 0) {
@@ -164,7 +169,7 @@ export const getRegionConfig = async (regionId) => {
               console.warn(`⚠️ 区域 ${regionId} 的分组没有FSA数据`);
             }
           }
-          // 方法3：如果都没有数据，记录警告
+          // 方法4：如果都没有数据，记录警告
           else {
             console.warn(`⚠️ 区域 ${regionId} 没有可用的FSA数据（既无直接数据也无分组数据）`);
           }

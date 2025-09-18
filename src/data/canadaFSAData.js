@@ -8,8 +8,54 @@ const extractAllFSAs = () => {
 // 使用所有FSA（1643个）
 export const deliverableFSAs = extractAllFSAs();
 
-// 为了兼容旧代码，导出completeFSAData作为别名
-export const completeFSAData = deliverableFSAs;
+// 创建包含坐标信息的FSA数据
+export const completeFSAData = fsaBoundariesData.features.map(feature => {
+  const fsa = feature.properties.CFSAUID;
+  // 计算多边形的中心点
+  let lat = 0, lng = 0, count = 0;
+  
+  if (feature.geometry && feature.geometry.coordinates) {
+    const coords = feature.geometry.coordinates[0];
+    if (Array.isArray(coords)) {
+      // 处理多边形
+      const polygonCoords = feature.geometry.type === 'MultiPolygon' ? coords[0] : coords;
+      polygonCoords.forEach(coord => {
+        if (Array.isArray(coord) && coord.length >= 2) {
+          lng += coord[0];
+          lat += coord[1];
+          count++;
+        }
+      });
+    }
+  }
+  
+  return {
+    fsa: fsa,
+    lat: count > 0 ? lat / count : null,
+    lng: count > 0 ? lng / count : null,
+    province: getProvinceFromFSA(fsa)
+  };
+}).filter(item => item.lat && item.lng);
+
+// 根据FSA代码判断省份
+function getProvinceFromFSA(fsa) {
+  const firstChar = fsa.charAt(0);
+  switch (firstChar) {
+    case 'V': return 'BC';
+    case 'T': return 'AB';
+    case 'S': return 'SK';
+    case 'R': return 'MB';
+    case 'P': case 'N': case 'K': case 'L': case 'M': return 'ON';
+    case 'H': case 'J': case 'G': return 'QC';
+    case 'E': return 'NB';
+    case 'B': return 'NS';
+    case 'C': return 'PE';
+    case 'A': return 'NL';
+    case 'X': return 'NT';
+    case 'Y': return 'YT';
+    default: return 'OTHER';
+  }
+}
 
 // 省份名称映射
 export const provinceNames = {
