@@ -1,5 +1,5 @@
 import React from 'react';
-import * as ReactWindow from 'react-window';
+const FixedSizeList = React.lazy(() => import('react-window').then(module => ({ default: module.FixedSizeList })));
 import CompactCityCard from './CompactCityCard';
 
 /**
@@ -42,7 +42,7 @@ const VirtualCityList = ({
 
   return (
     <div className={`virtual-list-container h-full ${className}`}>
-      <ReactWindow.FixedSizeList
+      <FixedSizeList
         height={getListHeight()}
         itemCount={cities.length}
         itemSize={88} // 80px card height + 8px gap
@@ -50,7 +50,7 @@ const VirtualCityList = ({
         overscanCount={3} // 预渲染3个额外的项目以改善滚动体验
       >
         {Row}
-      </ReactWindow.FixedSizeList>
+      </FixedSizeList>
     </div>
   );
 };

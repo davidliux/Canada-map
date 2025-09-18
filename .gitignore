@@ -113,4 +113,16 @@ test_*.html
 *_FIX.md
 *_DEBUG*.md
 *_ARCHITECTURE.md
-*_SUMMARY.md 
+*_SUMMARY.md
+
+# Large data files - transfer directly to server
+*.shp
+*.gml
+*.tar.gz
+/fsa_data/
+/lfsa000a21a_e/
+/public/data/*.json
+/public/data/*.zip
+/public/data/lfsa*/
+temp_*.csv
+canada_fsa_boundaries*.json 

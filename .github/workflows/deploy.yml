@@ -1,82 +1,97 @@
-name: Deploy to Aliyun Server
+name: Build and Deploy to GHCR
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-    - name: Setup Docker Buildx
-      uses: docker/setup-buildx-action@v2
+    - name: Log in to the Container registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and Save Docker Images
-      run: |
-        # 构建前端镜像
-        docker build -f Dockerfile.frontend -t map-frontend:latest .
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-        # 构建后端镜像
-        docker build -f backend/Dockerfile -t map-backend:latest ./backend
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-        # 保存镜像为 tar 文件
-        docker save map-frontend:latest -o frontend.tar
-        docker save map-backend:latest -o backend.tar
+    - name: Build and push frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/amd64
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          NODE_OPTIONS=--max-old-space-size=8192
 
-    - name: Deploy to Server
-      uses: appleboy/ssh-action@v0.1.5
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        platforms: linux/amd64
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SERVER_SSH_KEY }}
-        port: 22
         script: |
-          # 创建项目目录
-          mkdir -p ~/map-delivery
           cd ~/map-delivery
-
-          # 停止旧容器（如果存在）
-          docker-compose down || true
-
-    - name: Copy Files to Server
-      uses: appleboy/scp-action@v0.1.5
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        port: 22
-        source: "docker-compose.yml,nginx.conf,frontend.tar,backend.tar,.env.production"
-        target: "~/map-delivery/"
-
-    - name: Start Application
-      uses: appleboy/ssh-action@v0.1.5
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        port: 22
-        script: |
-          cd ~/map-delivery
-
-          # 加载 Docker 镜像
-          docker load -i frontend.tar
-          docker load -i backend.tar
-
-          # 设置环境变量
-          cp .env.production .env
-
-          # 启动应用
+          docker-compose pull
           docker-compose up -d
-
-          # 清理临时文件
-          rm -f frontend.tar backend.tar
-
-          # 检查容器状态
-          docker-compose ps
-
-          echo "Deployment completed successfully!"
+          docker system prune -f

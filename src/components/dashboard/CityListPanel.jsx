@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, X, Menu, Building2 } from 'lucide-react';
 import CompactCityCard from './CompactCityCard';
-import VirtualCityList from './VirtualCityList';
+// import VirtualCityList from './VirtualCityList';
 import { useDebounce } from '../../hooks/useDebounce';
 
 /**
@@ -170,18 +170,10 @@ const CityListPanel = ({
 
       {/* 城市列表 */}
       <div className="flex-1 overflow-hidden">
-        {filteredCities.length > 20 ? (
-          // 使用虚拟滚动（城市数量超过20个时）
-          <VirtualCityList
-            cities={filteredCities}
-            selectedCity={selectedCity}
-            onCitySelect={handleCitySelect}
-          />
-        ) : (
-          // 普通列表（城市数量较少时）
-          <div className="p-4 space-y-2 overflow-y-auto h-full">
-            {filteredCities.map((city) => (
-              <CompactCityCard
+        {/* 普通列表 */}
+        <div className="p-4 space-y-2 overflow-y-auto h-full">
+          {filteredCities.map((city) => (
+            <CompactCityCard
                 key={city.id || city.name}
                 city={city}
                 isSelected={selectedCity?.id === city.id}
@@ -195,7 +187,6 @@ const CityListPanel = ({
               </div>
             )}
           </div>
-        )}
       </div>
     </>
   );

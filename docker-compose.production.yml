@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}-frontend:latest
+    container_name: map-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    networks:
+      - map-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    environment:
+      - TZ=Asia/Shanghai
+
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY}-backend:latest
+    container_name: map-backend
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=5050
+    volumes:
+      - ./data:/app/data
+      - ./logs/backend:/app/logs
+      - backend-uploads:/app/uploads
+    networks:
+      - map-network
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5050/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); });"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: map-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${DB_NAME:-mapdb}
+      - POSTGRES_USER=${DB_USER:-mapuser}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - map-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mapuser} -d ${DB_NAME:-mapdb}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: map-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks:
+      - map-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # 可选：监控服务
+  monitoring:
+    image: prom/node-exporter:latest
+    container_name: map-monitoring
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    networks:
+      - map-network
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+networks:
+  map-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  backend-uploads:
+    driver: local

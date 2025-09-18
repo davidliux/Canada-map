@@ -1,0 +1,332 @@
+name: Build and Deploy via GHCR
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      frontend-image: ${{ steps.image.outputs.frontend-image }}
+      backend-image: ${{ steps.image.outputs.backend-image }}
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate version
+      id: version
+      run: |
+        VERSION="${{ github.sha }}-$(date +%Y%m%d-%H%M%S)"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Generated version: $VERSION"
+
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ steps.version.outputs.version }}
+
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ steps.version.outputs.version }}
+
+    - name: Build and push frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Build and push backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Set output
+      id: image
+      run: |
+        echo "frontend-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+        echo "backend-image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Create deployment script
+      run: |
+        cat > deploy.sh << 'EOF'
+        #!/bin/bash
+        set -e
+
+        FRONTEND_IMAGE="${1}"
+        BACKEND_IMAGE="${2}"
+        VERSION="${3}"
+
+        echo "🚀 Starting deployment of version: ${VERSION}"
+
+        # 创建必要的目录
+        mkdir -p ~/map-delivery/{data,logs,backups}
+        cd ~/map-delivery
+
+        # 备份当前配置
+        if [ -f docker-compose.yml ]; then
+          cp docker-compose.yml backups/docker-compose.yml.$(date +%Y%m%d_%H%M%S)
+        fi
+
+        # 登录到 GitHub Container Registry
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+        # 拉取新镜像
+        echo "📦 Pulling new images..."
+        docker pull ${FRONTEND_IMAGE}
+        docker pull ${BACKEND_IMAGE}
+
+        # 更新 docker-compose 配置
+        cat > docker-compose.yml << COMPOSE
+        version: '3.8'
+
+        services:
+          frontend:
+            image: ${FRONTEND_IMAGE}
+            container_name: map-frontend
+            restart: unless-stopped
+            ports:
+              - "80:80"
+              - "443:443"
+            volumes:
+              - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+              - ./ssl:/etc/nginx/ssl:ro
+              - ./logs/nginx:/var/log/nginx
+            networks:
+              - map-network
+            healthcheck:
+              test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+              interval: 30s
+              timeout: 10s
+              retries: 3
+              start_period: 40s
+
+          backend:
+            image: ${BACKEND_IMAGE}
+            container_name: map-backend
+            restart: unless-stopped
+            ports:
+              - "5050:5050"
+            environment:
+              NODE_ENV: production
+              PORT: 5050
+              DATABASE_URL: \${DATABASE_URL}
+              JWT_SECRET: \${JWT_SECRET}
+              CORS_ORIGIN: \${CORS_ORIGIN}
+            volumes:
+              - ./data:/app/data
+              - ./logs/backend:/app/logs
+            networks:
+              - map-network
+            healthcheck:
+              test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5050/health"]
+              interval: 30s
+              timeout: 10s
+              retries: 3
+              start_period: 60s
+
+        networks:
+          map-network:
+            driver: bridge
+        COMPOSE
+
+        # 停止旧容器
+        echo "⏸️  Stopping old containers..."
+        docker-compose down --remove-orphans || true
+
+        # 启动新容器
+        echo "▶️  Starting new containers..."
+        docker-compose up -d
+
+        # 等待服务健康
+        echo "⏳ Waiting for services to be healthy..."
+        sleep 10
+
+        # 检查服务状态
+        echo "✅ Checking service status..."
+        docker-compose ps
+        docker ps --filter "name=map-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+        # 清理旧镜像
+        echo "🧹 Cleaning up old images..."
+        docker image prune -f --filter "until=24h"
+
+        # 保存部署记录
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Deployed version: ${VERSION}" >> deployment.log
+
+        echo "✅ Deployment completed successfully!"
+        EOF
+        chmod +x deploy.sh
+
+    - name: Copy deployment files to server
+      run: |
+        scp -i ~/.ssh/deploy_key \
+          deploy.sh \
+          nginx.docker.conf \
+          docker-compose.yml \
+          ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/map-delivery/
+
+    - name: Copy environment configuration
+      run: |
+        cat > .env.production << EOF
+        NODE_ENV=production
+        DATABASE_URL=${{ secrets.DATABASE_URL }}
+        JWT_SECRET=${{ secrets.JWT_SECRET }}
+        CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+        EOF
+
+        scp -i ~/.ssh/deploy_key \
+          .env.production \
+          ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/map-delivery/.env
+
+    - name: Execute deployment
+      run: |
+        ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+          "cd ~/map-delivery && ./deploy.sh '${{ needs.build-and-push.outputs.frontend-image }}' '${{ needs.build-and-push.outputs.backend-image }}' '${{ needs.build-and-push.outputs.version }}'"
+
+    - name: Verify deployment
+      run: |
+        ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'VERIFY'
+        echo "🔍 Verifying deployment..."
+
+        # 检查容器运行状态
+        if docker ps | grep -q map-frontend && docker ps | grep -q map-backend; then
+          echo "✅ Containers are running"
+        else
+          echo "❌ Some containers are not running"
+          docker ps
+          exit 1
+        fi
+
+        # 检查服务响应
+        if curl -f -s -o /dev/null -w "%{http_code}" http://localhost | grep -q "200\|301\|302"; then
+          echo "✅ Frontend is responding"
+        else
+          echo "❌ Frontend is not responding"
+          exit 1
+        fi
+
+        if curl -f -s -o /dev/null -w "%{http_code}" http://localhost:5050/health | grep -q "200"; then
+          echo "✅ Backend is healthy"
+        else
+          echo "❌ Backend health check failed"
+          exit 1
+        fi
+
+        echo "🎉 Deployment verification completed!"
+        VERIFY
+
+    - name: Send deployment notification
+      if: always()
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "✅ Deployment succeeded for version: ${{ needs.build-and-push.outputs.version }}"
+        else
+          echo "❌ Deployment failed for version: ${{ needs.build-and-push.outputs.version }}"
+        fi
+
+  rollback:
+    needs: [build-and-push, deploy]
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Rollback to previous version
+      run: |
+        ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ROLLBACK'
+        echo "🔄 Rolling back to previous version..."
+        cd ~/map-delivery
+
+        # 恢复备份的 docker-compose
+        LATEST_BACKUP=$(ls -t backups/docker-compose.yml.* 2>/dev/null | head -n 2 | tail -n 1)
+        if [ -n "$LATEST_BACKUP" ]; then
+          cp $LATEST_BACKUP docker-compose.yml
+          docker-compose down
+          docker-compose up -d
+          echo "✅ Rolled back to previous configuration"
+        else
+          echo "❌ No backup found for rollback"
+          exit 1
+        fi
+        ROLLBACK
