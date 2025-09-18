@@ -277,6 +277,153 @@ router.get('/skid-pricing/:cityId/:zoneId/:skidCount', async (req, res) => {
 });
 
 /**
+ * GET /api/v1/truck-delivery/zones/:zoneId/groups/:groupId/skid-pricing
+ * 获取分组的板数定价数据
+ */
+router.get('/zones/:zoneId/groups/:groupId/skid-pricing', async (req, res) => {
+  try {
+    const { zoneId, groupId } = req.params;
+    const { cityId } = req.query;
+
+    console.log(`获取分组板数定价 - 区域: ${zoneId}, 分组: ${groupId}, 城市: ${cityId}`);
+
+    const pricingData = await prisma.groupSkidPricing.findMany({
+      where: {
+        cityId: cityId || 'toronto',
+        zoneId: zoneId,
+        groupId: groupId,
+        isActive: true
+      }
+    });
+
+    // 转换为前端需要的格式
+    const prices = {};
+    pricingData.forEach(item => {
+      prices[item.skidCount] = parseFloat(item.price);
+    });
+
+    res.json({
+      success: true,
+      data: {
+        cityId: cityId || 'toronto',
+        zoneId,
+        groupId,
+        prices
+      }
+    });
+  } catch (error) {
+    console.error('获取分组板数定价失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '获取分组板数定价失败',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/truck-delivery/zones/:zoneId/groups/:groupId/skid-pricing
+ * 保存分组的板数定价数据
+ */
+router.post('/zones/:zoneId/groups/:groupId/skid-pricing', async (req, res) => {
+  try {
+    const { zoneId, groupId } = req.params;
+    const { cityId, prices } = req.body;
+
+    console.log(`保存分组板数定价 - 区域: ${zoneId}, 分组: ${groupId}, 城市: ${cityId}`);
+    console.log('价格数据:', prices);
+
+    // 使用事务处理
+    const result = await prisma.$transaction(async (tx) => {
+      // 先删除旧数据
+      await tx.groupSkidPricing.deleteMany({
+        where: {
+          cityId: cityId || 'toronto',
+          zoneId: zoneId,
+          groupId: groupId
+        }
+      });
+
+      // 准备新数据
+      const dataToInsert = [];
+      Object.entries(prices).forEach(([skidCount, price]) => {
+        if (price && price > 0) {
+          dataToInsert.push({
+            cityId: cityId || 'toronto',
+            zoneId: zoneId,
+            groupId: groupId,
+            skidCount: skidCount === '16+' ? 17 : parseInt(skidCount),
+            price: price,
+            currency: 'CAD',
+            isActive: true
+          });
+        }
+      });
+
+      // 批量插入
+      if (dataToInsert.length > 0) {
+        await tx.groupSkidPricing.createMany({
+          data: dataToInsert
+        });
+      }
+
+      return dataToInsert.length;
+    });
+
+    console.log(`成功保存 ${result} 条分组板数定价数据`);
+
+    res.json({
+      success: true,
+      message: '分组板数定价已保存',
+      count: result
+    });
+  } catch (error) {
+    console.error('保存分组板数定价失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '保存分组板数定价失败',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/truck-delivery/zones/:zoneId/groups/:groupId/skid-pricing
+ * 删除分组的板数定价数据
+ */
+router.delete('/zones/:zoneId/groups/:groupId/skid-pricing', async (req, res) => {
+  try {
+    const { zoneId, groupId } = req.params;
+    const { cityId } = req.query;
+
+    console.log(`删除分组板数定价 - 区域: ${zoneId}, 分组: ${groupId}, 城市: ${cityId}`);
+
+    const result = await prisma.groupSkidPricing.deleteMany({
+      where: {
+        cityId: cityId || 'toronto',
+        zoneId: zoneId,
+        groupId: groupId
+      }
+    });
+
+    console.log(`成功删除 ${result.count} 条分组板数定价数据`);
+
+    res.json({
+      success: true,
+      message: '分组板数定价已删除',
+      count: result.count
+    });
+  } catch (error) {
+    console.error('删除分组板数定价失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '删除分组板数定价失败',
+      message: error.message
+    });
+  }
+});
+
+/**
  * POST /api/v1/truck-delivery/skid-pricing/batch
  * 批量导入板数定价数据
  */

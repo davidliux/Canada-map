@@ -10,7 +10,7 @@
  * Task 17: Add grid header row for zones
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Grid,
@@ -28,7 +28,8 @@ import {
   Info,
   ChevronRight,
   MapPin,
-  Layers
+  Layers,
+  FileSpreadsheet
 } from 'lucide-react';
 
 import pricingService from '../../../services/pricingService.js';
@@ -36,6 +37,12 @@ import cityStorageService from '../../../utils/storage/cityStorage.js';
 
 // 智能区域ID匹配函数
 const findMatchingZoneId = (zoneConfig, pricingDataKeys) => {
+  // 如果没有价格数据键，返回默认的区域标识
+  if (!pricingDataKeys || pricingDataKeys.length === 0) {
+    // 使用级别作为默认键
+    return `区域${zoneConfig.level}`;
+  }
+
   // 直接匹配
   if (pricingDataKeys.includes(zoneConfig.id)) {
     return zoneConfig.id;
@@ -52,7 +59,17 @@ const findMatchingZoneId = (zoneConfig, pricingDataKeys) => {
     return levelBasedId;
   }
 
-  // 尝试解析区域名称中的数字并匹配
+  // 尝试从名称中提取Zone编号
+  const zoneMatch = zoneConfig.name.match(/Zone\s*(\d+)/i);
+  if (zoneMatch) {
+    const zoneNumber = zoneMatch[1];
+    const zoneId = `区域${zoneNumber}`;
+    if (pricingDataKeys.includes(zoneId)) {
+      return zoneId;
+    }
+  }
+
+  // 尝试解析区域名称中的中文数字并匹配
   const nameMatch = zoneConfig.name.match(/区域(\d+)/);
   if (nameMatch) {
     const extractedNumber = nameMatch[1];
@@ -81,8 +98,9 @@ const findMatchingZoneId = (zoneConfig, pricingDataKeys) => {
     }
   }
 
-  console.warn(`无法匹配区域ID: ${zoneConfig.id}, 名称: ${zoneConfig.name}, 级别: ${zoneConfig.level}，可用数据键: ${pricingDataKeys.join(', ')}`);
-  return null;
+  // 如果还是没有匹配到，使用级别作为默认键
+  console.log(`使用默认区域键: 区域${zoneConfig.level} (原始: ${zoneConfig.name})`);
+  return `区域${zoneConfig.level}`;
 };
 
 // 默认板数范围
@@ -153,6 +171,9 @@ const SkidPricingMatrix = ({
   const [hasChanges, setHasChanges] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [hoveredZone, setHoveredZone] = useState(null);
+  const [showPasteDialog, setShowPasteDialog] = useState(false);
+  const [pasteData, setPasteData] = useState('');
+  const pasteInputRef = useRef(null);
 
   // 生成动态区域配置
   const zoneConfigs = useMemo(() => {
@@ -198,6 +219,207 @@ const SkidPricingMatrix = ({
       onChange(updatedData);
     }
   }, [onChange, pricingData]);
+
+  // 处理粘贴的价格数据
+  const handlePasteData = useCallback(() => {
+    if (!pasteData.trim()) {
+      alert('请粘贴价格数据');
+      return;
+    }
+
+    try {
+      // 解析粘贴的数据
+      const lines = pasteData.trim().split('\n');
+      const priceData = [];
+
+      // 检查是否是"板数 价格"格式（如 "1 skid    108"）
+      const isSkidFormat = lines.some(line => {
+        const cleanLine = line.toLowerCase().trim();
+        return cleanLine.includes('skid') || cleanLine.match(/^\d+\+?\s+(skids?|板)/);
+      });
+
+      if (isSkidFormat) {
+        // 处理 "1 skid    108" 格式
+        lines.forEach(line => {
+          // 提取价格（最后一个数字）
+          const matches = line.match(/(\d+(?:\.\d+)?)\s*$/);
+          if (matches) {
+            const price = parseFloat(matches[1]);
+            if (!isNaN(price) && price >= 0) {
+              priceData.push(price);
+            }
+          }
+        });
+
+        // 应用到当前选中的区域
+        if (priceData.length === 0) {
+          alert('未找到有效的价格数据');
+          return;
+        }
+
+        const selectedZone = zoneConfigs[selectedZoneIndex];
+        if (!selectedZone) {
+          alert('请先选择一个区域');
+          return;
+        }
+
+        // 使用标准化的键
+        const matchedZoneId = `区域${selectedZone.level}`;
+        const updatedZonePrices = {};
+        const numPrices = Math.min(priceData.length, DEFAULT_SKID_RANGES.length);
+
+        for (let i = 0; i < numPrices; i++) {
+          const skidRange = DEFAULT_SKID_RANGES[i];
+          updatedZonePrices[skidRange.skidCount] = priceData[i].toString();
+        }
+
+        const updatedData = {
+          ...pricingData,
+          [matchedZoneId]: updatedZonePrices
+        };
+
+        setPricingData(updatedData);
+        setHasChanges(true);
+        setPasteData('');
+        setShowPasteDialog(false);
+
+        if (onChange) {
+          onChange(updatedData);
+        }
+
+        const message = `成功导入 ${numPrices} 个板数价格到${selectedZone.name}`;
+        alert(message);
+        return;
+      }
+
+      // 原有的Excel格式处理逻辑
+      const dataMatrix = [];
+
+      lines.forEach(line => {
+        // 按Tab分隔（Excel复制的标准格式）
+        let values = line.split('\t');
+
+        // 如果没有Tab，尝试其他分隔符
+        if (values.length === 1) {
+          values = line.split(/[,;|]/);
+        }
+
+        // 清理并解析每个值
+        const cleanedValues = values.map(val => {
+          const cleanValue = val
+            .replace(/[$¥€£]/g, '') // 移除货币符号
+            .replace(/,/g, '') // 移除千分符
+            .trim();
+
+          const price = parseFloat(cleanValue);
+          return (!isNaN(price) && price >= 0) ? price : null;
+        }).filter(v => v !== null);
+
+        if (cleanedValues.length > 0) {
+          dataMatrix.push(cleanedValues);
+        }
+      });
+
+      if (dataMatrix.length === 0) {
+        alert('未找到有效的价格数据');
+        return;
+      }
+
+      // 判断数据格式：多列（每列一个区域）还是单列（仅当前区域）
+      const isMultiZone = dataMatrix.some(row => row.length > 1);
+
+      if (isMultiZone) {
+        // 多区域模式：每列对应一个区域
+        const numZones = Math.min(Math.max(...dataMatrix.map(row => row.length)), zoneConfigs.length);
+        const numSkids = Math.min(dataMatrix.length, DEFAULT_SKID_RANGES.length);
+
+        // 构建更新的价格数据
+        const updatedData = { ...pricingData };
+        let importedZones = 0;
+
+        for (let zoneIdx = 0; zoneIdx < numZones; zoneIdx++) {
+          if (zoneIdx >= zoneConfigs.length) break;
+
+          const zone = zoneConfigs[zoneIdx];
+          const pricingDataKeys = Object.keys(updatedData);
+          // 对于新数据，直接使用标准化的键
+          const zoneKey = `区域${zone.level}`;
+
+          const zonePrices = {};
+          for (let skidIdx = 0; skidIdx < numSkids; skidIdx++) {
+            const skidRange = DEFAULT_SKID_RANGES[skidIdx];
+            const price = dataMatrix[skidIdx]?.[zoneIdx];
+            if (price !== undefined && price !== null) {
+              zonePrices[skidRange.skidCount] = price.toString();
+            }
+          }
+
+          if (Object.keys(zonePrices).length > 0) {
+            updatedData[zoneKey] = zonePrices;
+            importedZones++;
+          }
+        }
+
+        setPricingData(updatedData);
+        setHasChanges(true);
+        setPasteData('');
+        setShowPasteDialog(false);
+
+        if (onChange) {
+          onChange(updatedData);
+        }
+
+        // 显示成功消息
+        alert(`成功导入 ${importedZones} 个区域的价格数据，每个区域 ${numSkids} 个板数价格`);
+
+      } else {
+        // 单区域模式：所有数据应用到当前选中的区域
+        const selectedZone = zoneConfigs[selectedZoneIndex];
+        if (!selectedZone) {
+          alert('请先选择一个区域');
+          return;
+        }
+
+        // 将所有数据展平成一维数组
+        const flatPrices = dataMatrix.flat();
+
+        // 对于新数据，使用标准化的键
+        const matchedZoneId = `区域${selectedZone.level}`;
+
+        const updatedZonePrices = {};
+        const numPrices = Math.min(flatPrices.length, DEFAULT_SKID_RANGES.length);
+
+        for (let i = 0; i < numPrices; i++) {
+          const skidRange = DEFAULT_SKID_RANGES[i];
+          updatedZonePrices[skidRange.skidCount] = flatPrices[i].toString();
+        }
+
+        const updatedData = {
+          ...pricingData,
+          [matchedZoneId]: updatedZonePrices
+        };
+
+        setPricingData(updatedData);
+        setHasChanges(true);
+        setPasteData('');
+        setShowPasteDialog(false);
+
+        if (onChange) {
+          onChange(updatedData);
+        }
+
+        const message = numPrices < flatPrices.length
+          ? `成功导入当前区域 ${numPrices} 个价格（共提供 ${flatPrices.length} 个）`
+          : `成功导入当前区域 ${numPrices} 个价格`;
+
+        alert(message);
+      }
+
+    } catch (error) {
+      console.error('解析粘贴数据失败:', error);
+      alert('解析数据失败，请检查格式');
+    }
+  }, [pasteData, zoneConfigs, selectedZoneIndex, pricingData, onChange]);
 
   // 保存价格数据
   const handleSave = useCallback(async () => {
@@ -415,16 +637,27 @@ const SkidPricingMatrix = ({
                 </p>
               </div>
             </div>
-            {hasChanges && (
-              <motion.div
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-2 text-yellow-400"
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowPasteDialog(true)}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md
+                         transition-colors text-sm flex items-center gap-2"
+                title="从Excel粘贴价格"
               >
-                <AlertCircle className="w-4 h-4" />
-                <span className="text-sm">{locale === 'zh' ? '有未保存的更改' : 'Unsaved changes'}</span>
-              </motion.div>
-            )}
+                <Clipboard className="w-4 h-4" />
+                <span>{locale === 'zh' ? '粘贴价格' : 'Paste Prices'}</span>
+              </button>
+              {hasChanges && (
+                <motion.div
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center gap-2 text-yellow-400"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{locale === 'zh' ? '有未保存的更改' : 'Unsaved changes'}</span>
+                </motion.div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -459,6 +692,158 @@ const SkidPricingMatrix = ({
                 {saveStatus === 'saving' && (locale === 'zh' ? '保存中...' : 'Saving...')}
               </span>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 粘贴价格对话框 */}
+      <AnimatePresence>
+        {showPasteDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowPasteDialog(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-lg p-6 w-[600px] max-w-[90vw] border border-gray-700"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center space-x-2 mb-4">
+                <FileSpreadsheet className="w-5 h-5 text-green-400" />
+                <h3 className="text-lg font-semibold text-white">
+                  {locale === 'zh' ? '从Excel粘贴价格数据' : 'Paste Prices from Excel'}
+                </h3>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {locale === 'zh' ? '粘贴价格数据' : 'Paste Price Data'}
+                  </label>
+                  <textarea
+                    ref={pasteInputRef}
+                    value={pasteData}
+                    onChange={(e) => setPasteData(e.target.value)}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const text = e.clipboardData.getData('text');
+                      setPasteData(text);
+                    }}
+                    className="w-full h-48 px-3 py-2 bg-gray-800 border border-gray-600
+                             rounded-md text-white placeholder-gray-400 font-mono text-sm
+                             focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder={locale === 'zh' ?
+                      `从Excel复制价格数据后粘贴到这里...
+
+支持的格式：
+• 多列数据：每列对应一个区域（区域1-5）
+• 单列数据：应用到当前选中的区域
+• 板数+价格格式：带板数描述的价格列表
+
+示例1（5个区域的价格）：
+90    108    126    144    162
+108   130.5  153    175.5  198
+126   153    180    207    234
+
+示例2（板数+价格格式）：
+1 skid    108
+2 skids   130.5
+3 skids   153
+...` :
+                      `Paste price data from Excel here...
+
+Supported formats:
+• Single column: one price per line
+• Multiple columns: Tab or comma separated
+• Skid format: Lines with "skid" and price
+• Example:
+  1 skid    108
+  2 skids   130.5
+  3 skids   153`}
+                  />
+                </div>
+
+                <div className="bg-gray-800 rounded-lg p-3 border border-gray-600">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-gray-300 space-y-1">
+                      <p className="font-medium text-yellow-400">
+                        {locale === 'zh' ? '使用说明：' : 'Instructions:'}
+                      </p>
+                      <ul className="space-y-1 text-gray-400">
+                        {locale === 'zh' ? (
+                          <>
+                            <li>• 支持三种格式：Excel表格、单列价格、板数+价格文本</li>
+                            <li>• Excel格式：每列对应一个区域，从左到右为区域1-5</li>
+                            <li>• 板数格式：如 "1 skid    108" 自动识别并提取价格</li>
+                            <li>• 每行对应一个板数，从上到下为1板到16+板</li>
+                            <li>• 支持包含货币符号的数据（会自动清理）</li>
+                            <li>• 单列数据将应用到当前选中的区域</li>
+                          </>
+                        ) : (
+                          <>
+                            <li>• Supports: Excel tables, single column, skid+price format</li>
+                            <li>• Excel: Each column is a zone (Zone 1-5)</li>
+                            <li>• Skid format: "1 skid    108" auto-extracts price</li>
+                            <li>• System will fill 17 skid ranges in order</li>
+                            <li>• Currency symbols are automatically cleaned</li>
+                            <li>• Single column applies to selected zone</li>
+                          </>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {pasteData && (
+                  <div className="text-sm text-gray-400">
+                    {(() => {
+                      const lines = pasteData.trim().split('\n');
+                      const firstLine = lines[0]?.split('\t') || [];
+                      const numColumns = firstLine.length;
+                      const numRows = lines.length;
+
+                      if (numColumns > 1) {
+                        return locale === 'zh'
+                          ? `检测到 ${numColumns} 列 x ${numRows} 行数据（${numColumns} 个区域）`
+                          : `Detected ${numColumns} columns x ${numRows} rows (${numColumns} zones)`;
+                      } else {
+                        const totalValues = pasteData.split(/[\n\t,;|\s]+/).filter(v => v).length;
+                        return locale === 'zh'
+                          ? `检测到 ${totalValues} 个值（单区域）`
+                          : `Detected ${totalValues} values (single zone)`;
+                      }
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setPasteData('');
+                    setShowPasteDialog(false);
+                  }}
+                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                >
+                  {locale === 'zh' ? '取消' : 'Cancel'}
+                </button>
+                <button
+                  onClick={handlePasteData}
+                  disabled={!pasteData.trim()}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600
+                           text-white rounded-md transition-colors flex items-center space-x-2"
+                >
+                  <Clipboard className="w-4 h-4" />
+                  <span>{locale === 'zh' ? '导入价格' : 'Import Prices'}</span>
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

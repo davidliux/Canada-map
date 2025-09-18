@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Users, MapPin, DollarSign, ChevronDown, ChevronRight, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users, MapPin, DollarSign, ChevronDown, ChevronRight, Package, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FSAGroupEditor from './FSAGroupEditor';
+import BatchFSAGroupCreator from './BatchFSAGroupCreator';
 import {
   getRegionFSAGroups,
   createFSAGroup,
@@ -20,6 +21,7 @@ import {
   calculateGroupStats
 } from '../../utils/fsaGroupValidation';
 import { dataUpdateNotifier } from '../../utils/dataUpdateNotifier';
+import { completeFSAData } from '../../data/canadaFSAData';
 
 /**
  * FSA组管理器
@@ -33,15 +35,17 @@ const FSAGroupManager = ({
   region,
   fsaData = [],
   onGroupsChange,
-  isReadOnly = false
+  isReadOnly = false,
+  regionColor // 新增：传入区域颜色
 }) => {
   const [groups, setGroups] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [editingGroup, setEditingGroup] = useState(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showBatchCreate, setShowBatchCreate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showAllUngrouped, setShowAllUngrouped] = useState(false);
+  // const [showAllUngrouped, setShowAllUngrouped] = useState(false); // 不再需要，已移除未分组FSA显示
 
   // 加载组数据
   const loadGroups = async () => {
@@ -73,23 +77,38 @@ const FSAGroupManager = ({
     return () => unsubscribe();
   }, [region?.id]);
 
-  // 计算未分组的FSA
+  // 计算未分组的FSA（从完整的FSA数据中选择）
   const ungroupedFSAs = useMemo(() => {
-    if (!region?.fsaCodes || !Array.isArray(region.fsaCodes)) {
-      console.log('区域没有FSA代码或格式不正确:', region);
-      return [];
-    }
-    const ungrouped = getUngroupedFSAs(region.fsaCodes, groups);
-    console.log(`区域 ${region.id} 总FSA: ${region.fsaCodes.length}, 未分组: ${ungrouped.length}`);
+    // 获取所有已分组的FSA
+    const groupedFSAs = new Set();
+    groups.forEach(group => {
+      if (group.fsaCodes && Array.isArray(group.fsaCodes)) {
+        group.fsaCodes.forEach(fsa => groupedFSAs.add(fsa));
+      }
+    });
+
+    // 从完整的FSA数据中提取所有FSA代码
+    const allFSAs = completeFSAData.map(item => item.fsa);
+
+    // 找出未分组的FSA
+    const ungrouped = allFSAs.filter(fsa => !groupedFSAs.has(fsa));
+    console.log(`完整FSA总数: ${allFSAs.length}, 已分组: ${groupedFSAs.size}, 未分组: ${ungrouped.length}`);
     return ungrouped;
-  }, [region?.fsaCodes, groups]);
+  }, [groups]);
 
   // 计算组统计信息
   const groupStats = useMemo(() => {
-    return groups.map(group => ({
-      ...group,
-      stats: calculateGroupStats(group, fsaData)
-    }));
+    return groups.map(group => {
+      // 确保 fsaCodes 是一个数组
+      const validatedGroup = {
+        ...group,
+        fsaCodes: Array.isArray(group.fsaCodes) ? group.fsaCodes : []
+      };
+      return {
+        ...validatedGroup,
+        stats: calculateGroupStats(validatedGroup, fsaData)
+      };
+    });
   }, [groups, fsaData]);
 
   // 创建新组
@@ -111,7 +130,12 @@ const FSAGroupManager = ({
         }
       }
 
-      const newGroup = await createFSAGroup(region.id, groupData);
+      // 确保新组包含区域颜色
+      const groupWithColor = {
+        ...groupData,
+        displayColor: regionColor || groupData.displayColor || '#3B82F6'
+      };
+      const newGroup = await createFSAGroup(region.id, groupWithColor);
       if (newGroup) {
         await loadGroups();
         setShowCreateDialog(false);
@@ -120,6 +144,110 @@ const FSAGroupManager = ({
     } catch (err) {
       console.error('创建组失败:', err);
       alert(err.message || '创建组失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 批量创建组
+  const handleBatchCreateGroups = async (groupsData) => {
+    try {
+      setLoading(true);
+      let successCount = 0;
+      const errors = [];
+      const warnings = []; // 添加警告信息数组
+      const currentGroups = [...groups]; // 使用当前组列表进行验证
+
+      for (const groupData of groupsData) {
+        try {
+          // 验证组名
+          const validation = validateGroupName(groupData.name, currentGroups);
+          if (!validation.isValid) {
+            errors.push(`${groupData.name}: ${validation.errors.join(', ')}`);
+            continue;
+          }
+
+          // 检测FSA冲突并过滤
+          let finalFSACodes = groupData.fsaCodes || [];
+          let skippedFSAs = [];
+
+          if (groupData.fsaCodes?.length > 0) {
+            const conflicts = detectFSAConflicts(groupData.fsaCodes, currentGroups);
+            if (conflicts.hasConflicts) {
+              // 过滤出非冲突的 FSA
+              const nonConflictingFSAs = groupData.fsaCodes.filter(
+                fsa => !conflicts.conflicts.some(c => c.fsa === fsa)
+              );
+
+              skippedFSAs = conflicts.conflicts.map(c => c.fsa);
+
+              if (nonConflictingFSAs.length > 0) {
+                // 使用非冲突的 FSA
+                finalFSACodes = nonConflictingFSAs;
+                // 记录警告信息
+                warnings.push(`${groupData.name}: 跳过了 ${skippedFSAs.length} 个已分配的FSA (${skippedFSAs.join(', ')}), 保存了 ${nonConflictingFSAs.length} 个FSA`);
+                console.log(`${groupData.name}: 将跳过冲突的FSA: ${skippedFSAs.join(', ')}, 保存非冲突的FSA: ${nonConflictingFSAs.join(', ')}`);
+              } else {
+                // 如果所有 FSA 都冲突，跳过创建
+                errors.push(`${groupData.name}: 所有FSA都已被分配到其他分组 (${skippedFSAs.join(', ')})`);
+                continue;
+              }
+            }
+          }
+
+          // 确保新组包含区域颜色
+          const groupWithColor = {
+            ...groupData,
+            fsaCodes: finalFSACodes, // 使用过滤后的FSA列表
+            displayColor: regionColor || groupData.color || '#3B82F6'
+          };
+
+          const newGroup = await createFSAGroup(region.id, groupWithColor);
+          if (newGroup) {
+            successCount++;
+            // 将新创建的组添加到当前组列表，以便后续验证
+            currentGroups.push({
+              ...groupWithColor,
+              id: newGroup.id || newGroup,
+              name: groupData.name,
+              fsaCodes: finalFSACodes // 使用过滤后的FSA列表
+            });
+          }
+        } catch (err) {
+          errors.push(`${groupData.name}: ${err.message}`);
+        }
+      }
+
+      // 显示结果
+      let resultMessage = '';
+
+      if (successCount > 0) {
+        await loadGroups(); // 重新加载所有组
+        resultMessage = `✅ 成功创建 ${successCount} 个分组\n`;
+        onGroupsChange?.();
+      }
+
+      if (warnings.length > 0) {
+        resultMessage += `\n⚠️ 警告信息:\n${warnings.join('\n')}\n`;
+      }
+
+      if (errors.length > 0) {
+        resultMessage += `\n❌ 失败信息:\n${errors.join('\n')}`;
+      }
+
+      // 显示综合结果
+      if (resultMessage) {
+        alert(resultMessage.trim());
+      }
+
+      // 如果有成功创建的分组，关闭对话框
+      if (successCount > 0) {
+        setShowBatchCreate(false);
+      }
+
+    } catch (err) {
+      console.error('批量创建失败:', err);
+      alert(err.message || '批量创建失败');
     } finally {
       setLoading(false);
     }
@@ -210,18 +338,28 @@ const FSAGroupManager = ({
           <Users className="w-5 h-5 text-blue-400" />
           <h3 className="text-lg font-semibold text-gray-200">FSA分组管理</h3>
           <span className="text-sm text-gray-400">
-            ({groups.length} 个组, {ungroupedFSAs.length} 个未分组FSA)
+            ({groups.length} 个组, {region?.fsaCodes?.length || 0} 个FSA, 可选{ungroupedFSAs.length}个FSA)
           </span>
         </div>
         {!isReadOnly && (
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm"
-            disabled={loading}
-          >
-            <Plus className="w-4 h-4" />
-            创建组
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCreateDialog(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm"
+              disabled={loading}
+            >
+              <Plus className="w-4 h-4" />
+              创建组
+            </button>
+            <button
+              onClick={() => setShowBatchCreate(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-500 hover:to-blue-500 transition-all text-sm"
+              disabled={loading}
+            >
+              <Layers className="w-4 h-4" />
+              批量创建
+            </button>
+          </div>
         )}
       </div>
 
@@ -257,7 +395,7 @@ const FSAGroupManager = ({
 
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: group.displayColor }}
+                  style={{ backgroundColor: group.displayColor || regionColor || '#3B82F6' }}
                 />
 
                 <div className="flex-1">
@@ -347,73 +485,7 @@ const FSAGroupManager = ({
         ))}
       </div>
 
-      {/* 未分组FSA */}
-      {ungroupedFSAs.length > 0 && (
-        <div className="p-3 bg-gray-800/30 border border-gray-700 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package className="w-4 h-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-300">未分组FSA</span>
-              <span className="text-sm text-gray-400">({ungroupedFSAs.length} 个)</span>
-            </div>
-          </div>
-
-          {/* 简洁预览 - 只显示前几个FSA */}
-          <div className="mt-2">
-            {!showAllUngrouped ? (
-              // 收起状态 - 显示简洁预览
-              <div className="flex items-center gap-2">
-                <div className="flex flex-wrap gap-1">
-                  {ungroupedFSAs.slice(0, 5).map(fsa => (
-                    <span
-                      key={fsa}
-                      className="px-2 py-0.5 bg-gray-800 border border-gray-600 rounded text-xs text-gray-300"
-                    >
-                      {fsa}
-                    </span>
-                  ))}
-                  {ungroupedFSAs.length > 5 && (
-                    <span className="text-xs text-gray-400 px-1">
-                      +{ungroupedFSAs.length - 5} 更多
-                    </span>
-                  )}
-                </div>
-
-                {/* 展开按钮 */}
-                {ungroupedFSAs.length > 5 && (
-                  <button
-                    onClick={() => setShowAllUngrouped(true)}
-                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    查看全部
-                  </button>
-                )}
-              </div>
-            ) : (
-              // 展开状态 - 显示全部FSA
-              <div>
-                <div className="flex flex-wrap gap-1 max-h-48 overflow-y-auto p-2 bg-gray-900/20 rounded">
-                  {ungroupedFSAs.map(fsa => (
-                    <span
-                      key={fsa}
-                      className="px-2 py-0.5 bg-gray-800 border border-gray-600 rounded text-xs text-gray-300"
-                    >
-                      {fsa}
-                    </span>
-                  ))}
-                </div>
-                {/* 收起按钮 */}
-                <button
-                  onClick={() => setShowAllUngrouped(false)}
-                  className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  收起
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* 未分组FSA - 已移除显示 */}
 
       {/* 创建/编辑对话框 */}
       {(showCreateDialog || editingGroup) && (
@@ -430,6 +502,16 @@ const FSAGroupManager = ({
             setShowCreateDialog(false);
             setEditingGroup(null);
           }}
+        />
+      )}
+
+      {/* 批量创建对话框 */}
+      {showBatchCreate && (
+        <BatchFSAGroupCreator
+          region={region}
+          existingGroups={groups}
+          onSave={handleBatchCreateGroups}
+          onCancel={() => setShowBatchCreate(false)}
         />
       )}
     </div>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Plus, 
-  Edit3, 
-  Trash2, 
-  MapPin, 
-  Building2, 
+import {
+  Plus,
+  Edit3,
+  Trash2,
+  MapPin,
+  Building2,
   Map,
   Users,
   AlertTriangle,

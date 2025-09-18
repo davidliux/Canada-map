@@ -1,25 +1,30 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { completeFSAData } from '../data/canadaFSAData';
 
 // 地图控制器 - 处理搜索和筛选的地图联动
-const MapController = ({ 
-  mapRef, 
-  searchQuery, 
+const MapController = ({
+  mapRef,
+  searchQuery,
   selectedFilters = [],
   onMapUpdate,
   fsaData = [],
-  deliverableFSAs = []
+  completeFSAData = [],
+  onFSAFound, // 新增：当找到FSA时的回调
+  onPricingPanelOpen // 新增：打开价格面板的回调
 }) => {
   const animationRef = useRef(null);
   
-  // FSA坐标映射 - 实际项目中这些数据应该来自地理数据库
-  const fsaCoordinates = {
-    'M5V': { lat: 43.6426, lng: -79.3871, province: 'ON', city: 'Toronto' },
-    'M5G': { lat: 43.6532, lng: -79.3832, province: 'ON', city: 'Toronto' },
-    'V6B': { lat: 49.2827, lng: -123.1207, province: 'BC', city: 'Vancouver' },
-    'H3B': { lat: 45.5017, lng: -73.5673, province: 'QC', city: 'Montreal' },
-    // 更多FSA坐标...
-  };
+  // 从completeFSAData构建FSA坐标映射
+  const fsaCoordinates = {};
+  completeFSAData.forEach(fsa => {
+    fsaCoordinates[fsa.fsa] = {
+      lat: fsa.lat,
+      lng: fsa.lng,
+      province: fsa.province,
+      city: fsa.city
+    };
+  });
 
   // 省份中心坐标
   const provinceCoordinates = {
@@ -101,7 +106,24 @@ const MapController = ({
     const fsaMatch = fsaCoordinates[searchTerm];
     if (fsaMatch) {
       console.log(`🎯 找到FSA: ${searchTerm}，跳转到坐标:`, fsaMatch);
-      animateMapTo(fsaMatch.lat, fsaMatch.lng, 12);
+      animateMapTo(fsaMatch.lat, fsaMatch.lng, 14); // 提高缩放级别以更清楚地显示FSA
+
+      // 触发FSA找到事件
+      if (onFSAFound) {
+        onFSAFound(searchTerm);
+      }
+
+      // 延迟打开价格面板，等待地图动画完成
+      setTimeout(() => {
+        if (onPricingPanelOpen) {
+          onPricingPanelOpen({
+            fsaCode: searchTerm,
+            province: fsaMatch.province,
+            city: fsaMatch.city
+          });
+        }
+      }, 800);
+
       return;
     }
 
@@ -111,7 +133,25 @@ const MapController = ({
       const fsaMatch = fsaCoordinates[fsaCode];
       if (fsaMatch) {
         console.log(`🎯 通过邮编找到FSA: ${fsaCode}，跳转到坐标:`, fsaMatch);
-        animateMapTo(fsaMatch.lat, fsaMatch.lng, 13);
+        animateMapTo(fsaMatch.lat, fsaMatch.lng, 14);
+
+        // 触发FSA找到事件
+        if (onFSAFound) {
+          onFSAFound(fsaCode);
+        }
+
+        // 延迟打开价格面板
+        setTimeout(() => {
+          if (onPricingPanelOpen) {
+            onPricingPanelOpen({
+              fsaCode: fsaCode,
+              province: fsaMatch.province,
+              city: fsaMatch.city,
+              postalCode: searchTerm // 保留完整邮编
+            });
+          }
+        }, 800);
+
         return;
       }
     }

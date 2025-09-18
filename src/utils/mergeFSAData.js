@@ -1,131 +1,135 @@
 /**
  * FSA数据合并工具
- * 用于合并现有的可配送FSA和完整的FSA数据
+ * 用于处理和增强FSA数据
  */
 
-import { deliverableFSAs } from '../data/deliverableFSA';
-import { completeFSAData, getAllFSACodes } from '../data/completeFSAData';
+import { completeFSAData, getFSAsByProvince, getFSADetails } from '../data/canadaFSAData';
+import fsaBoundariesData from '../../public/data/canada_fsa_boundaries.json';
 
 /**
  * 获取所有FSA的增强数据
- * 合并可配送状态和详细信息
+ * 将FSA代码转换为包含详细信息的对象
  */
 export const getEnhancedFSAData = () => {
-  const deliverableSet = new Set(deliverableFSAs);
+  // completeFSAData是一个FSA代码数组
+  // 需要从fsaBoundariesData中获取详细信息
+  return completeFSAData.map(fsaCode => {
+    const feature = fsaBoundariesData.features.find(
+      f => f.properties.CFSAUID === fsaCode
+    );
 
-  return completeFSAData.map(fsa => ({
-    ...fsa,
-    isDeliverable: deliverableSet.has(fsa.fsa),
-    status: deliverableSet.has(fsa.fsa) ? 'active' : 'available'
-  }));
+    if (feature) {
+      return {
+        fsa: fsaCode,
+        province: feature.properties.PRNAME || '',
+        city: '', // 原始数据中没有城市信息
+        isDeliverable: true, // 所有FSA都可配送
+        status: 'active',
+        landArea: feature.properties.LANDAREA
+      };
+    }
+
+    return {
+      fsa: fsaCode,
+      province: '',
+      city: '',
+      isDeliverable: true,
+      status: 'active'
+    };
+  });
 };
 
 /**
- * 获取缺失的FSA（在完整列表中但不在可配送列表中）
+ * 获取缺失的FSA（现在没有缺失的，因为所有FSA都可配送）
  */
 export const getMissingFSAs = () => {
-  const deliverableSet = new Set(deliverableFSAs);
-  const allFSAs = getAllFSACodes();
-
-  return allFSAs.filter(fsa => !deliverableSet.has(fsa));
+  return []; // 没有缺失的FSA
 };
 
 /**
  * 获取FSA覆盖率统计
  */
 export const getFSACoverageStats = () => {
-  const deliverableSet = new Set(deliverableFSAs);
-  const allFSAs = getAllFSACodes();
-  const missingFSAs = getMissingFSAs();
+  const byProvince = getFSAsByProvince();
 
   // 按省份统计
   const provinceStats = {};
-  completeFSAData.forEach(item => {
-    if (!provinceStats[item.province]) {
-      provinceStats[item.province] = {
-        total: 0,
-        deliverable: 0,
-        missing: 0
-      };
-    }
-    provinceStats[item.province].total++;
-    if (deliverableSet.has(item.fsa)) {
-      provinceStats[item.province].deliverable++;
-    } else {
-      provinceStats[item.province].missing++;
-    }
+  Object.keys(byProvince).forEach(province => {
+    provinceStats[province] = {
+      total: byProvince[province].length,
+      deliverable: byProvince[province].length, // 全部可配送
+      missing: 0
+    };
   });
 
   return {
-    total: allFSAs.length,
-    deliverable: deliverableFSAs.length,
-    missing: missingFSAs.length,
-    coverageRate: ((deliverableFSAs.length / allFSAs.length) * 100).toFixed(2) + '%',
+    total: completeFSAData.length,
+    deliverable: completeFSAData.length,
+    missing: 0,
+    coverageRate: '100.00%',
     provinceStats
   };
 };
 
 /**
  * 搜索FSA
- * @param {string} query - 搜索关键词（FSA代码、城市名或省份）
+ * @param {string} query - 搜索关键词（FSA代码或省份）
  */
 export const searchFSA = (query) => {
-  const searchTerm = query.toLowerCase();
-  const deliverableSet = new Set(deliverableFSAs);
+  const searchTerm = query.toUpperCase();
+  const enhancedData = getEnhancedFSAData();
 
-  return completeFSAData.filter(item =>
-    item.fsa.toLowerCase().includes(searchTerm) ||
-    item.city.toLowerCase().includes(searchTerm) ||
-    item.province.toLowerCase().includes(searchTerm)
-  ).map(item => ({
-    ...item,
-    isDeliverable: deliverableSet.has(item.fsa)
-  }));
+  return enhancedData.filter(item =>
+    item.fsa.includes(searchTerm) ||
+    item.province.toUpperCase().includes(searchTerm)
+  );
 };
 
 /**
- * 批量添加FSA到可配送列表
+ * 批量添加FSA到可配送列表（现在所有FSA都已经可配送）
  * @param {Array} fsaCodes - FSA代码数组
  */
 export const addFSAsToDeliverable = (fsaCodes) => {
-  const currentSet = new Set(deliverableFSAs);
-  fsaCodes.forEach(fsa => currentSet.add(fsa));
-
-  // 返回更新后的数组（按字母排序）
-  return Array.from(currentSet).sort();
+  // 所有FSA都已经可配送，直接返回当前列表
+  return completeFSAData;
 };
 
 /**
  * 按省份分组FSA
  */
 export const groupFSAByProvince = () => {
+  const byProvince = getFSAsByProvince();
   const grouped = {};
-  const deliverableSet = new Set(deliverableFSAs);
 
-  completeFSAData.forEach(item => {
-    if (!grouped[item.province]) {
-      grouped[item.province] = {
-        name: item.province,
-        fsas: [],
-        deliverableCount: 0,
-        totalCount: 0
-      };
-    }
+  // 省份代码到名称的映射
+  const provinceNames = {
+    'BC': 'British Columbia',
+    'AB': 'Alberta',
+    'SK': 'Saskatchewan',
+    'MB': 'Manitoba',
+    'ON': 'Ontario',
+    'QC': 'Quebec',
+    'NB': 'New Brunswick',
+    'NS': 'Nova Scotia',
+    'PE': 'Prince Edward Island',
+    'NL': 'Newfoundland and Labrador',
+    'YT': 'Yukon',
+    'NT': 'Northwest Territories',
+    'NU': 'Nunavut'
+  };
 
-    grouped[item.province].fsas.push({
-      ...item,
-      isDeliverable: deliverableSet.has(item.fsa)
-    });
-
-    grouped[item.province].totalCount++;
-    if (deliverableSet.has(item.fsa)) {
-      grouped[item.province].deliverableCount++;
-    }
-  });
-
-  // 对每个省份的FSA列表排序
-  Object.values(grouped).forEach(province => {
-    province.fsas.sort((a, b) => a.fsa.localeCompare(b.fsa));
+  Object.keys(byProvince).forEach(provinceCode => {
+    const provinceName = provinceNames[provinceCode] || provinceCode;
+    grouped[provinceCode] = {
+      name: provinceName,
+      fsas: byProvince[provinceCode].map(fsaCode => ({
+        fsa: fsaCode,
+        province: provinceName,
+        isDeliverable: true
+      })),
+      deliverableCount: byProvince[provinceCode].length,
+      totalCount: byProvince[provinceCode].length
+    };
   });
 
   return grouped;

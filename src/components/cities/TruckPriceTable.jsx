@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  DollarSign, 
-  Save, 
+import {
+  DollarSign,
+  Save,
   RotateCcw,
   AlertTriangle,
   CheckCircle,
@@ -12,7 +12,9 @@ import {
   Calculator,
   Edit3,
   Lock,
-  Unlock
+  Unlock,
+  Clipboard,
+  FileSpreadsheet
 } from 'lucide-react';
 import { DEFAULT_WEIGHT_RANGES } from '../../utils/unifiedStorage.js';
 import { 
@@ -39,8 +41,11 @@ const TruckPriceTable = ({
   const [isDirty, setIsDirty] = useState(false);
   const [batchValue, setBatchValue] = useState('');
   const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [showPasteDialog, setShowPasteDialog] = useState(false);
+  const [pasteData, setPasteData] = useState('');
   const [selectedRanges, setSelectedRanges] = useState(new Set());
   const [editingRange, setEditingRange] = useState(null);
+  const pasteInputRef = useRef(null);
 
   // 初始化价格数据
   useEffect(() => {
@@ -151,6 +156,82 @@ const TruckPriceTable = ({
     }
   };
 
+  // 处理粘贴的价格数据
+  const handlePasteData = () => {
+    if (!pasteData.trim()) {
+      alert('请粘贴价格数据');
+      return;
+    }
+
+    try {
+      // 解析粘贴的数据
+      // 支持多种格式：Tab分隔、逗号分隔、换行分隔
+      const lines = pasteData.trim().split('\n');
+      const parsedPrices = [];
+
+      lines.forEach(line => {
+        // 清理数据：移除空格，处理不同分隔符
+        const values = line.trim()
+          .split(/[\t,;|\s]+/) // 支持Tab、逗号、分号、管道符、空格
+          .filter(val => val.length > 0);
+
+        values.forEach(val => {
+          // 清理数字：移除货币符号、千分符等
+          const cleanValue = val
+            .replace(/[$¥€£]/g, '') // 移除货币符号
+            .replace(/,/g, '') // 移除千分符
+            .trim();
+
+          const price = parseFloat(cleanValue);
+          if (!isNaN(price) && price >= 0) {
+            parsedPrices.push(price);
+          }
+        });
+      });
+
+      if (parsedPrices.length === 0) {
+        alert('未找到有效的价格数据');
+        return;
+      }
+
+      // 将解析的价格应用到价格表
+      const updatedPrices = [...prices];
+      const numPrices = Math.min(parsedPrices.length, prices.length);
+
+      for (let i = 0; i < numPrices; i++) {
+        updatedPrices[i] = {
+          ...updatedPrices[i],
+          price: parsedPrices[i],
+          isActive: true // 自动激活有价格的区间
+        };
+      }
+
+      setPrices(updatedPrices);
+      setIsDirty(true);
+      setPasteData('');
+      setShowPasteDialog(false);
+
+      if (onChange) {
+        onChange({
+          regionId,
+          prices: updatedPrices,
+          currency: 'CAD'
+        });
+      }
+
+      // 显示成功消息
+      const message = numPrices < parsedPrices.length
+        ? `成功导入 ${numPrices} 个价格（共提供 ${parsedPrices.length} 个）`
+        : `成功导入 ${numPrices} 个价格`;
+
+      alert(message);
+
+    } catch (error) {
+      console.error('解析粘贴数据失败:', error);
+      alert('解析数据失败，请检查格式');
+    }
+  };
+
   // 重置价格
   const resetPrices = () => {
     const resetPrices = DEFAULT_WEIGHT_RANGES.map(range => ({
@@ -160,7 +241,7 @@ const TruckPriceTable = ({
     }));
     setPrices(resetPrices);
     setIsDirty(true);
-    
+
     if (onChange) {
       onChange({
         regionId,
@@ -222,20 +303,33 @@ const TruckPriceTable = ({
             )}
             
             {allowBatchOperations && (
-              <button
-                onClick={() => setShowBatchDialog(true)}
-                disabled={disabled}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 
-                         text-white rounded-md transition-colors text-sm"
-              >
-                批量设置
-              </button>
+              <>
+                <button
+                  onClick={() => setShowPasteDialog(true)}
+                  disabled={disabled}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-600
+                           text-white rounded-md transition-colors text-sm flex items-center space-x-1"
+                  title="从Excel粘贴价格"
+                >
+                  <Clipboard className="w-4 h-4" />
+                  <span>粘贴价格</span>
+                </button>
+
+                <button
+                  onClick={() => setShowBatchDialog(true)}
+                  disabled={disabled}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600
+                           text-white rounded-md transition-colors text-sm"
+                >
+                  批量设置
+                </button>
+              </>
             )}
-            
+
             <button
               onClick={resetPrices}
               disabled={disabled}
-              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-500 
+              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-500
                        text-white rounded-md transition-colors text-sm"
             >
               <RotateCcw className="w-4 h-4" />
@@ -482,6 +576,104 @@ const TruckPriceTable = ({
                            text-white rounded-md transition-colors"
                 >
                   应用设置
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 粘贴价格对话框 */}
+      <AnimatePresence>
+        {showPasteDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowPasteDialog(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-lg p-6 w-[600px] max-w-[90vw] border border-gray-700"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center space-x-2 mb-4">
+                <FileSpreadsheet className="w-5 h-5 text-green-400" />
+                <h3 className="text-lg font-semibold text-white">从Excel粘贴价格数据</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    粘贴价格数据
+                  </label>
+                  <textarea
+                    ref={pasteInputRef}
+                    value={pasteData}
+                    onChange={(e) => setPasteData(e.target.value)}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const text = e.clipboardData.getData('text');
+                      setPasteData(text);
+                    }}
+                    className="w-full h-48 px-3 py-2 bg-gray-800 border border-gray-600
+                             rounded-md text-white placeholder-gray-400 font-mono text-sm
+                             focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="从Excel复制价格数据后粘贴到这里...
+
+支持的格式：
+• 单列：每行一个价格
+• 多列：用Tab或逗号分隔
+• 示例：
+  90    108    126
+  108   130.5  153
+  126   153    180"
+                  />
+                </div>
+
+                <div className="bg-gray-800 rounded-lg p-3 border border-gray-600">
+                  <div className="flex items-start space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-gray-300 space-y-1">
+                      <p className="font-medium text-yellow-400">使用说明：</p>
+                      <ul className="space-y-1 text-gray-400">
+                        <li>• 直接从Excel复制价格列或行</li>
+                        <li>• 系统将按顺序填充到13个板数区间</li>
+                        <li>• 支持包含货币符号的数据（会自动清理）</li>
+                        <li>• 如果提供超过13个价格，多余的将被忽略</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {pasteData && (
+                  <div className="text-sm text-gray-400">
+                    检测到数据：{pasteData.split(/[\n\t,;|\s]+/).filter(v => v).length} 个值
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setPasteData('');
+                    setShowPasteDialog(false);
+                  }}
+                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handlePasteData}
+                  disabled={!pasteData.trim()}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600
+                           text-white rounded-md transition-colors flex items-center space-x-2"
+                >
+                  <Clipboard className="w-4 h-4" />
+                  <span>导入价格</span>
                 </button>
               </div>
             </motion.div>

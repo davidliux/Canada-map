@@ -386,6 +386,161 @@ class PricingService {
   }
 
   /**
+   * Get pricing modes for a city and zone
+   * @param {string} cityId - City ID
+   * @param {string} zoneId - Zone ID
+   * @returns {Promise<Object>} Pricing modes configuration
+   */
+  async getPricingModes(cityId, zoneId) {
+    try {
+      const response = await this.apiClient.get(`/pricing-modes/${cityId}/${zoneId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching pricing modes:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Save pricing mode configuration
+   * @param {string} cityId - City ID
+   * @param {string} zoneId - Zone ID
+   * @param {Object} mode - Pricing mode configuration
+   * @returns {Promise<Object>} Saved pricing mode
+   */
+  async savePricingMode(cityId, zoneId, mode) {
+    try {
+      const response = await this.apiClient.post(`/pricing-modes/${cityId}/${zoneId}`, {
+        mode
+      });
+
+      // Clear cache for this zone
+      this.clearCache(`${cityId}:${zoneId}`);
+
+      return response.data;
+    } catch (error) {
+      console.error('Error saving pricing mode:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Delete pricing mode
+   * @param {string} cityId - City ID
+   * @param {string} zoneId - Zone ID
+   * @param {string} modeType - Mode type to delete
+   * @returns {Promise<Object>} Delete result
+   */
+  async deletePricingMode(cityId, zoneId, modeType) {
+    try {
+      const response = await this.apiClient.delete(
+        `/pricing-modes/${cityId}/${zoneId}/${modeType}`
+      );
+
+      // Clear cache for this zone
+      this.clearCache(`${cityId}:${zoneId}`);
+
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting pricing mode:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Calculate price using pricing modes
+   * @param {string} cityId - City ID
+   * @param {string} zoneId - Zone ID
+   * @param {number} quantity - Number of pallets/plates
+   * @param {Object} options - Additional options (urgency, includeFullTruck, etc.)
+   * @returns {Promise<Object>} Price calculation result
+   */
+  async calculatePrice(cityId, zoneId, quantity, options = {}) {
+    try {
+      const response = await this.apiClient.post('/pricing-modes/calculate', {
+        cityId,
+        zoneId,
+        quantity,
+        options
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error calculating price:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Compare prices across different modes
+   * @param {string} cityId - City ID
+   * @param {string} zoneId - Zone ID
+   * @param {Array<number>} quantities - Array of quantities to compare
+   * @returns {Promise<Object>} Comparison results
+   */
+  async compareModePrices(cityId, zoneId, quantities) {
+    try {
+      const results = await Promise.all(
+        quantities.map(quantity =>
+          this.calculatePrice(cityId, zoneId, quantity)
+        )
+      );
+
+      return {
+        cityId,
+        zoneId,
+        comparisons: quantities.map((quantity, index) => ({
+          quantity,
+          ...results[index].data
+        }))
+      };
+    } catch (error) {
+      console.error('Error comparing mode prices:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Export pricing configuration including modes
+   * @param {string} cityId - City ID
+   * @param {Object} options - Export options
+   * @returns {Promise<Object>} Export data
+   */
+  async exportPricingModes(cityId, options = {}) {
+    try {
+      const params = {
+        format: options.format || 'json',
+        includeHistory: options.includeHistory || false
+      };
+
+      const response = await this.apiClient.get(`/pricing-export/${cityId}`, { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error exporting pricing modes:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Import pricing configuration including modes
+   * @param {string} cityId - City ID
+   * @param {Object} importData - Import data
+   * @returns {Promise<Object>} Import result
+   */
+  async importPricingModes(cityId, importData) {
+    try {
+      const response = await this.apiClient.post(`/pricing-import/${cityId}`, importData);
+
+      // Clear cache for this city
+      this.clearCache(cityId);
+
+      return response.data;
+    } catch (error) {
+      console.error('Error importing pricing modes:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * Get regions for a given city using CityStorageService
    * @private
    * @param {string} cityId - City ID to get regions for
@@ -514,6 +669,89 @@ class PricingService {
   }
 
   /**
+   * 获取区域的板数定价（区域默认价格）
+   * @param {string} cityId - 城市ID
+   * @param {string} zoneId - 区域ID
+   * @returns {Promise<Object>} 区域板数定价数据
+   */
+  async getZoneSkidPricing(cityId, zoneId) {
+    try {
+      // 先尝试从API获取
+      const response = await this.apiClient.get(`/zones/${zoneId}/skid-pricing`, {
+        params: { cityId }
+      });
+
+      if (response.data?.success && response.data?.data?.prices) {
+        return response.data.data.prices;
+      }
+
+      // 如果API失败，尝试从localStorage获取
+      const key = `skid_pricing_${cityId}_${zoneId}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+
+      // 返回空对象作为默认值
+      return {};
+    } catch (error) {
+      console.error('获取区域板数定价失败:', error);
+
+      // API失败时回退到localStorage
+      try {
+        const key = `skid_pricing_${cityId}_${zoneId}`;
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      } catch (localError) {
+        console.error('从localStorage获取区域板数定价也失败:', localError);
+      }
+
+      return {};
+    }
+  }
+
+  /**
+   * 保存区域的板数定价（区域默认价格）
+   * @param {string} cityId - 城市ID
+   * @param {string} zoneId - 区域ID
+   * @param {Object} pricingData - 定价数据
+   * @returns {Promise<boolean>} 保存结果
+   */
+  async saveZoneSkidPricing(cityId, zoneId, pricingData) {
+    try {
+      const response = await this.apiClient.post(`/zones/${zoneId}/skid-pricing`, {
+        cityId,
+        prices: pricingData
+      });
+
+      if (response.data?.success) {
+        // 同时保存到localStorage作为缓存
+        const key = `skid_pricing_${cityId}_${zoneId}`;
+        localStorage.setItem(key, JSON.stringify(pricingData));
+        console.log('区域板数定价已保存:', { cityId, zoneId });
+        return true;
+      }
+
+      throw new Error(response.data?.error || '保存失败');
+    } catch (error) {
+      console.error('保存区域板数定价失败:', error);
+
+      // API失败时仍保存到localStorage
+      try {
+        const key = `skid_pricing_${cityId}_${zoneId}`;
+        localStorage.setItem(key, JSON.stringify(pricingData));
+        console.log('区域板数定价已保存到本地（API失败）:', { cityId, zoneId });
+        return true;
+      } catch (localError) {
+        console.error('保存到localStorage也失败:', localError);
+        throw error;
+      }
+    }
+  }
+
+  /**
    * 获取FSA分组的板数定价
    * @param {string} cityId - 城市ID
    * @param {string} zoneId - 区域ID
@@ -522,12 +760,48 @@ class PricingService {
    */
   async getGroupSkidPricing(cityId, zoneId, groupId) {
     try {
+      const response = await this.apiClient.get(`/zones/${zoneId}/groups/${groupId}/skid-pricing`, {
+        params: { cityId }
+      });
+
+      if (response.data?.success && response.data?.data?.prices) {
+        // 返回包含prices字段的对象，以保持API一致性
+        return {
+          prices: response.data.data.prices,
+          source: 'api'
+        };
+      }
+
+      // 如果API失败，尝试从localStorage获取（向后兼容）
       const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
       const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : null;
+      if (stored) {
+        const parsedData = JSON.parse(stored);
+        return {
+          prices: parsedData,
+          source: 'localStorage'
+        };
+      }
+      return null;
     } catch (error) {
       console.error('获取分组板数定价失败:', error);
-      return null;
+
+      // API失败时回退到localStorage
+      try {
+        const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const parsedData = JSON.parse(stored);
+          return {
+            prices: parsedData,
+            source: 'localStorage'
+          };
+        }
+        return null;
+      } catch (localError) {
+        console.error('从localStorage获取分组板数定价也失败:', localError);
+        return null;
+      }
     }
   }
 
@@ -541,13 +815,33 @@ class PricingService {
    */
   async saveGroupSkidPricing(cityId, zoneId, groupId, pricingData) {
     try {
-      const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
-      localStorage.setItem(key, JSON.stringify(pricingData));
-      console.log('分组板数定价已保存:', { cityId, zoneId, groupId });
-      return true;
+      const response = await this.apiClient.post(`/zones/${zoneId}/groups/${groupId}/skid-pricing`, {
+        cityId,
+        prices: pricingData
+      });
+
+      if (response.data?.success) {
+        // 同时保存到localStorage作为缓存
+        const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
+        localStorage.setItem(key, JSON.stringify(pricingData));
+        console.log('分组板数定价已保存到数据库:', { cityId, zoneId, groupId });
+        return true;
+      }
+
+      throw new Error(response.data?.error || '保存失败');
     } catch (error) {
       console.error('保存分组板数定价失败:', error);
-      throw error;
+
+      // API失败时仍保存到localStorage
+      try {
+        const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
+        localStorage.setItem(key, JSON.stringify(pricingData));
+        console.log('分组板数定价已保存到本地（API失败）:', { cityId, zoneId, groupId });
+        return true;
+      } catch (localError) {
+        console.error('保存到localStorage也失败:', localError);
+        throw error;
+      }
     }
   }
 
@@ -560,13 +854,32 @@ class PricingService {
    */
   async deleteGroupSkidPricing(cityId, zoneId, groupId) {
     try {
-      const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
-      localStorage.removeItem(key);
-      console.log('分组板数定价已删除:', { cityId, zoneId, groupId });
-      return true;
+      const response = await this.apiClient.delete(`/zones/${zoneId}/groups/${groupId}/skid-pricing`, {
+        params: { cityId }
+      });
+
+      if (response.data?.success) {
+        // 同时从localStorage删除
+        const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
+        localStorage.removeItem(key);
+        console.log('分组板数定价已从数据库删除:', { cityId, zoneId, groupId });
+        return true;
+      }
+
+      throw new Error(response.data?.error || '删除失败');
     } catch (error) {
       console.error('删除分组板数定价失败:', error);
-      throw error;
+
+      // API失败时仍从localStorage删除
+      try {
+        const key = `skid_pricing_group_${cityId}_${zoneId}_${groupId}`;
+        localStorage.removeItem(key);
+        console.log('分组板数定价已从本地删除（API失败）:', { cityId, zoneId, groupId });
+        return true;
+      } catch (localError) {
+        console.error('从localStorage删除也失败:', localError);
+        throw error;
+      }
     }
   }
 

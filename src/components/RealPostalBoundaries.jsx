@@ -4,7 +4,7 @@ import L from 'leaflet';
 import { motion } from 'framer-motion';
 import { MapPin, Package, Shield, Search, Download } from 'lucide-react';
 import { deliverablePostalCodes } from '../data/postalCodes';
-import { deliverableFSAs, isDeliverable, getDeliveryStats } from '../data/deliverableFSA';
+import { completeFSAData, isDeliverable, getDeliveryStats } from '../data/canadaFSAData';
 
 // 修复Leaflet默认图标问题
 delete L.Icon.Default.prototype._getIconUrl;

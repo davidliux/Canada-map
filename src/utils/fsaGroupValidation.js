@@ -266,8 +266,11 @@ export const suggestGroupName = (existingGroups = [], baseName = '新组') => {
  * @returns {Object} 统计信息
  */
 export const calculateGroupStats = (group, fsaData = {}) => {
+  // 确保 fsaCodes 是一个数组
+  const fsaCodes = Array.isArray(group.fsaCodes) ? group.fsaCodes : [];
+
   const stats = {
-    fsaCount: group.fsaCodes ? group.fsaCodes.length : 0,
+    fsaCount: fsaCodes.length,
     postalCodeCount: 0,
     hasPricing: group.customPricing && group.customPricing.enabled,
     createdAt: group.metadata?.createdAt,
@@ -275,8 +278,8 @@ export const calculateGroupStats = (group, fsaData = {}) => {
   };
 
   // 计算邮编总数
-  if (group.fsaCodes && fsaData) {
-    group.fsaCodes.forEach(fsa => {
+  if (fsaCodes.length > 0 && fsaData) {
+    fsaCodes.forEach(fsa => {
       if (fsaData[fsa] && fsaData[fsa].postalCodes) {
         stats.postalCodeCount += fsaData[fsa].postalCodes.length;
       }

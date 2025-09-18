@@ -158,4 +158,51 @@
 
 .animate-pulse-slow {
   animation: pulse-slow 3s ease-in-out infinite;
-} 
+}
+
+/* 自定义FSA弹窗样式 */
+.custom-fsa-popup .leaflet-popup-content-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8) !important;
+  border-radius: 0.75rem !important;
+  overflow: visible !important;
+}
+
+.custom-fsa-popup .leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.4 !important;
+  width: auto !important;
+}
+
+.custom-fsa-popup .leaflet-popup-tip-container {
+  width: 30px;
+  height: 15px;
+  margin-top: -1px;
+}
+
+.custom-fsa-popup .leaflet-popup-tip {
+  background: #1f2937 !important;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+.custom-fsa-popup .leaflet-popup-close-button {
+  display: none !important;
+}
+
+/* 动画延迟工具类 */
+@layer utilities {
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+}

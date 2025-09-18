@@ -11,8 +11,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, AlertTriangle, Check, X, Filter, MapPin, FileText, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deliverableFSAs, getFSAsByProvince } from '../../data/deliverableFSA.js';
-import { completeFSAData, getAllFSACodes, getFSAByProvince } from '../../data/completeFSAData.js';
+import { completeFSAData, getFSAsByProvince } from '../../data/canadaFSAData.js';
 import { cityStorageService } from '../../utils/storage/cityStorage.js';
 
 /**
@@ -235,7 +234,7 @@ const FSASelector = ({
     inputFSAs.forEach(fsa => {
       if (fsaPattern.test(fsa)) {
         // 检查是否在可用的FSA列表中
-        if (deliverableFSAs.includes(fsa)) {
+        if (completeFSAData.includes(fsa)) {
           validFSAs.push(fsa);
         } else {
           invalidFSAs.push(`${fsa} (不在配送范围内)`);

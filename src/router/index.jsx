@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import MainLayout from '../layouts/MainLayout';
 import FSAManagementLayout from '../layouts/FSAManagementLayout';
 import TruckManagementLayout from '../layouts/TruckManagementLayout';
@@ -25,7 +25,6 @@ import NotFound from '../pages/NotFound';
 // Lazy load Truck Delivery pages
 const TruckDelivery = lazy(() => import('../pages/TruckDelivery'));
 const CityView = lazy(() => import('../pages/TruckDelivery/CityView'));
-const MapTest = lazy(() => import('../pages/MapTest'));
 const FSADataManager = lazy(() => import('../components/FSADataManager'));
 
 // Lazy load Provider Management pages
@@ -33,10 +32,7 @@ const ProviderManagement = lazy(() => import('../pages/Providers'));
 
 // Import Truck Delivery pages
 import RegionsPage from '../pages/TruckDelivery/RegionsPage';
-import PricingPage from '../pages/TruckDelivery/PricingPage';
-import SkidPricingPage from '../pages/TruckDelivery/SkidPricingPage';
-import PricingDashboard from '../pages/TruckDelivery/PricingDashboard';
-import DataMigrationTool from '../pages/TruckDelivery/DataMigrationTool';
+import PricingConfigPageV3 from '../pages/TruckDelivery/PricingConfigPageV3';
 
 // Test Pages
 import TestSkidPricing from '../pages/TestSkidPricing';
@@ -120,36 +116,8 @@ const router = createBrowserRouter([
             element: <RegionsPage />,
           },
           {
-            path: 'pricing',
-            element: <PricingPage />,
-          },
-          {
-            path: 'dynamic-pricing',
-            element: <PricingDashboard />,
-          },
-          {
-            path: 'skid-pricing',
-            element: <SkidPricingPage />,
-          },
-          {
-            path: 'migration',
-            element: <DataMigrationTool />,
-          },
-          {
-            path: 'map-test',
-            element: (
-              <Suspense fallback={<div className="flex items-center justify-center h-screen">加载地图组件...</div>}>
-                <MapTest />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'providers',
-            element: (
-              <Suspense fallback={<div className="flex items-center justify-center h-screen">加载中...</div>}>
-                <ProviderManagement />
-              </Suspense>
-            ),
+            path: 'pricing-config',
+            element: <PricingConfigPageV3 />,
           },
         ],
       },
@@ -162,16 +130,6 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      // Provider Management Routes (redirect to new location)
-      {
-        path: 'management/providers',
-        element: <Navigate to="/management/truck-delivery/providers" replace />,
-      },
-      // Keep legacy route for backward compatibility
-      {
-        path: 'providers',
-        element: <Navigate to="/management/truck-delivery/providers" replace />,
-      },
       // Test Routes
       {
         path: 'test-skid-pricing',
@@ -180,6 +138,14 @@ const router = createBrowserRouter([
       {
         path: 'test-fsa-groups',
         element: <TestFSAGroups />,
+      },
+      {
+        path: 'test-data-loading',
+        element: (
+          <Suspense fallback={<div className="flex items-center justify-center h-screen">加载中...</div>}>
+            {React.createElement(lazy(() => import('../pages/TestDataLoading')))}
+          </Suspense>
+        ),
       },
       // Settings Route
       {

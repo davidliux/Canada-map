@@ -11,10 +11,11 @@ import {
   Activity,
   Users,
   BarChart,
-  Zap
+  Zap,
+  Search
 } from 'lucide-react';
 import { getAllRegionConfigs, getStorageStats } from '../../utils/unifiedStorage';
-import { deliverableFSAs } from '../../data/deliverableFSA';
+import { completeFSAData } from '../../data/canadaFSAData';
 import { getCityFSAs } from '../../data/cityFSAMapping';
 
 const Dashboard = () => {
@@ -31,7 +32,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [selectedFilters, setSelectedFilters] = useState([]);
-  const [deliverableFSAsList, setDeliverableFSAsList] = useState([]);
+  const [completeFSADataList, setcompleteFSADataList] = useState([]);
   const [highlightedFSAs, setHighlightedFSAs] = useState([]);
   const mapRef = useRef(null);
 
@@ -51,7 +52,7 @@ const Dashboard = () => {
       });
 
       // 计算覆盖率
-      const totalFSAs = deliverableFSAs.length;
+      const totalFSAs = completeFSAData.length;
       const coverageRate = totalFSAs > 0 ? (activeFSAs.size / totalFSAs * 100).toFixed(1) : 0;
 
       setStats({
@@ -166,6 +167,7 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+
         </motion.div>
 
 
@@ -178,7 +180,9 @@ const Dashboard = () => {
             selectedRegions={selectedRegions}
             selectedFilters={selectedFilters}
             highlightedFSAs={highlightedFSAs}
-            onFSAClick={(fsa) => console.log('FSA clicked:', fsa)}
+            onFSAClick={(fsa) => {
+              console.log('FSA clicked:', fsa);
+            }}
             onRegionChange={handleRegionSelect}
           />
         </div>
@@ -188,8 +192,16 @@ const Dashboard = () => {
           mapRef={mapRef}
           searchQuery={searchQuery}
           selectedFilters={selectedFilters}
-          fsaData={deliverableFSAsList}
-          deliverableFSAs={deliverableFSAs}
+          fsaData={completeFSADataList}
+          onFSAFound={(fsaCode) => {
+            console.log('📦 FSA找到:', fsaCode);
+            // 高亮显示FSA
+            setHighlightedFSAs([fsaCode]);
+          }}
+          onPricingPanelOpen={(fsaInfo) => {
+            console.log('💰 FSA信息:', fsaInfo);
+          }}
+          completeFSAData={completeFSAData}
         />
 
         {/* 右下角图例 */}
@@ -223,6 +235,7 @@ const Dashboard = () => {
           </div>
         </motion.div>
       </div>
+
     </div>
   );
 };

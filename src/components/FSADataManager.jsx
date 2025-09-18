@@ -19,7 +19,7 @@ import {
   searchFSA,
   groupFSAByProvince
 } from '../utils/mergeFSAData';
-import { provinceNames } from '../data/completeFSAData';
+import { provinceNames } from '../data/canadaFSAData';
 
 /**
  * FSA数据管理组件

@@ -22,7 +22,13 @@ async function apiRequest(url, options = {}) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
+      console.error('API错误响应:', JSON.stringify({
+        url,
+        status: response.status,
+        error: data.error,
+        data: data
+      }, null, 2));
+      throw new Error(data.error?.message || data.message || data.error || `HTTP error! status: ${response.status}`);
     }
 
     return data;
@@ -304,11 +310,146 @@ export const cacheManager = {
   },
 };
 
+/**
+ * 板数定价配置API
+ */
+export const pricingConfigApi = {
+  // 获取定价配置
+  async getConfigurations(cityId) {
+    const url = `${TRUCK_API}/pricing-configs?cityId=${cityId}`;
+    return apiRequest(url);
+  },
+
+  // 保存定价配置
+  async saveConfiguration(config) {
+    const method = config.id ? 'PUT' : 'POST';
+    const url = config.id
+      ? `${TRUCK_API}/pricing-configs/${config.id}`
+      : `${TRUCK_API}/pricing-configs`;
+
+    return apiRequest(url, {
+      method,
+      body: JSON.stringify(config)
+    });
+  },
+
+  // 删除定价配置
+  async deleteConfiguration(configId) {
+    const url = `${TRUCK_API}/pricing-configs/${configId}`;
+    return apiRequest(url, { method: 'DELETE' });
+  },
+
+  // 批量更新配置
+  async batchUpdate(configs) {
+    const url = `${TRUCK_API}/pricing-configs/batch`;
+    return apiRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(configs)
+    });
+  }
+};
+
+/**
+ * 分组管理API
+ */
+export const groupApi = {
+  // 获取区域的所有分组
+  async getByZoneId(zoneId) {
+    const url = `${TRUCK_API}/zones/${zoneId}/groups`;
+    const result = await apiRequest(url);
+
+    // 转换分组数据格式（snake_case to camelCase）
+    const transformedGroups = (result.data || []).map(group => ({
+      ...group,
+      fsaCodes: group.fsa_codes || [],  // 转换 fsa_codes 为 fsaCodes
+      customPricing: group.custom_pricing || group.customPricing,  // 兼容处理
+      displayColor: group.display_color || group.displayColor  // 兼容处理
+    }));
+
+    // 确保返回正确的数据格式
+    return {
+      success: true,
+      data: transformedGroups
+    };
+  },
+
+  // 创建分组
+  async create(group) {
+    const url = `${TRUCK_API}/groups`;
+    // 转换为后端需要的格式（camelCase to snake_case）
+    const backendGroup = {
+      ...group,
+      fsa_codes: group.fsaCodes || group.fsa_codes || [],
+      custom_pricing: group.customPricing || group.custom_pricing,
+      display_color: group.displayColor || group.display_color
+    };
+    // 删除前端格式的字段，避免冗余
+    delete backendGroup.fsaCodes;
+    delete backendGroup.customPricing;
+    delete backendGroup.displayColor;
+
+    return apiRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(backendGroup)
+    });
+  },
+
+  // 更新分组
+  async update(groupId, updates) {
+    const url = `${TRUCK_API}/groups/${groupId}`;
+    // 转换为后端需要的格式（camelCase to snake_case）
+    const backendUpdates = { ...updates };
+    if (updates.fsaCodes !== undefined) {
+      backendUpdates.fsa_codes = updates.fsaCodes;
+      delete backendUpdates.fsaCodes;
+    }
+    if (updates.customPricing !== undefined) {
+      backendUpdates.custom_pricing = updates.customPricing;
+      delete backendUpdates.customPricing;
+    }
+    if (updates.displayColor !== undefined) {
+      backendUpdates.display_color = updates.displayColor;
+      delete backendUpdates.displayColor;
+    }
+
+    return apiRequest(url, {
+      method: 'PUT',
+      body: JSON.stringify(backendUpdates)
+    });
+  },
+
+  // 删除分组
+  async delete(groupId) {
+    const url = `${TRUCK_API}/groups/${groupId}`;
+    return apiRequest(url, { method: 'DELETE' });
+  }
+};
+
+// 为了向后兼容，导出简化的API方法
+export const getCities = async () => {
+  const data = await cityApi.getAll();
+  return { success: true, data };
+};
+
+export const getZonesByCity = async (cityId) => {
+  const data = await zoneApi.getByCityId(cityId);
+  return { success: true, data };
+};
+
+export const getFSAGroupsByZone = async (zoneId) => {
+  return groupApi.getByZoneId(zoneId);
+};
+
+export const getSkidPricingConfigurations = (cityId) => pricingConfigApi.getConfigurations(cityId);
+export const saveSkidPricingConfiguration = (config) => pricingConfigApi.saveConfiguration(config);
+
 // 导出完整的API对象
 const truckDeliveryApi = {
   cities: cityApi,
   zones: zoneApi,
   prices: priceApi,
+  groups: groupApi,
+  pricingConfigs: pricingConfigApi,
   search: searchApi,
   stats: statsApi,
   transform: dataTransform,

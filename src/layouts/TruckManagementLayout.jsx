@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Truck, Building2, MapPin, DollarSign, ChevronRight, Settings, Database, Grid, Package } from 'lucide-react';
+import { Truck, Building2, MapPin, ChevronRight, DollarSign } from 'lucide-react';
 
 const TruckManagementLayout = () => {
   const location = useLocation();
@@ -14,46 +14,16 @@ const TruckManagementLayout = () => {
       description: '管理卡车配送城市和区域划分'
     },
     {
-      name: '服务商管理',
-      href: '/management/truck-delivery/providers',
-      icon: Truck,
-      description: '管理物流服务商、定价模型和服务区域'
-    },
-    {
       name: '区域配置',
       href: '/management/truck-delivery/regions',
       icon: MapPin,
       description: '配置卡车配送区域和覆盖范围'
     },
     {
-      name: '重量定价',
-      href: '/management/truck-delivery/pricing',
-      icon: Package,
-      description: '基于重量的配送价格策略'
-    },
-    {
-      name: '板数定价',
-      href: '/management/truck-delivery/skid-pricing',
-      icon: Grid,
-      description: '基于托盘数量的价格配置'
-    },
-    {
-      name: '动态定价',
-      href: '/management/truck-delivery/dynamic-pricing',
-      icon: Settings,
-      description: '高级动态定价管理系统'
-    },
-    {
-      name: '数据迁移',
-      href: '/management/truck-delivery/migration',
-      icon: Database,
-      description: '从旧系统迁移定价数据'
-    },
-    {
-      name: '地图测试',
-      href: '/management/truck-delivery/map-test',
-      icon: MapPin,
-      description: '测试和演示卡车配送地图组件功能'
+      name: '定价配置',
+      href: '/management/truck-delivery/pricing-config',
+      icon: DollarSign,
+      description: '管理四种定价模式的配置'
     },
   ];
 
@@ -83,7 +53,7 @@ const TruckManagementLayout = () => {
               <div>
                 <h1 className="text-2xl font-bold text-white">卡车配送管理中心</h1>
                 <p className="mt-1 text-sm text-gray-400">
-                  管理卡车配送城市、服务商、区域配置、价格策略和配送范围设置
+                  管理卡车配送城市、区域配置和配送范围设置
                 </p>
               </div>
             </div>

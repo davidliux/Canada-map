@@ -14,7 +14,7 @@ import {
   AlertCircle,
   RefreshCw
 } from 'lucide-react';
-import { getDeliveryStats, getFSAsByProvince } from '../data/deliverableFSA';
+import { getDeliveryStats, getFSAsByProvince } from '../data/canadaFSAData';
 import { getAllRegionConfigs, getStorageStats } from '../utils/unifiedStorage';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
 

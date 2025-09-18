@@ -5,8 +5,8 @@ import { MapPin, Info, Database, CheckCircle, Plus, Minus, X } from 'lucide-reac
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// 可配送的FSA列表
-import { deliverableFSAs } from '../data/deliverableFSA.js';
+// 可配送的FSA列表和地图数据
+import { completeFSAData, getFSAGeoJSON } from '../data/canadaFSAData.js';
 import { generateQuotationHTML, printQuotation } from '../utils/quotationGenerator.js';
 import { getRegionFSAs, getRegionConfig } from '../utils/unifiedStorage';
 import { dataUpdateNotifier } from '../utils/dataUpdateNotifier';
@@ -21,12 +21,11 @@ import {
   getDeliveryAreaStats
 } from '../utils/deliveryAreaFilter.js';
 
-const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs, selectedRegions: propSelectedRegions = [], selectedFilters = [], onFSAClick, onProvinceChange, onRegionChange }) => {
+const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', completeFSAData, selectedRegions: propSelectedRegions = [], selectedFilters = [], highlightedFSAs = [], onFSAClick, onProvinceChange, onRegionChange }) => {
   const [filteredFSAs, setFilteredFSAs] = useState([]);
   const [mapData, setMapData] = useState(null);
   const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
-  const [currentDeliverableFSAs, setCurrentDeliverableFSAs] = useState([]);
   const [currentMapProvince, setCurrentMapProvince] = useState(selectedProvince);
   const [selectedFSAForQuotation, setSelectedFSAForQuotation] = useState(null);
   const [isUserInteracting, setIsUserInteracting] = useState(false); // 跟踪用户交互状态
@@ -36,6 +35,7 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   const [visibleRegions, setVisibleRegions] = useState([1, 2, 3, 4, 5]); // 可见的快速筛选区域
   const [showRegionInput, setShowRegionInput] = useState(false); // 是否显示添加区域输入框
   const [newRegionNumber, setNewRegionNumber] = useState(''); // 新区域编号
+  const [regionColors, setRegionColors] = useState({}); // 存储区域颜色配置
 
   // 同步外部props的selectedRegions变化
   useEffect(() => {
@@ -62,6 +62,39 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         }
       }
 
+      // 额外加载当前选中的区域（可能是UUID格式的卡车配送区域）
+      const colors = {};
+      for (const regionId of selectedRegions) {
+        if (!map[regionId]) { // 如果还没加载这个区域
+          try {
+            const fsas = await getRegionFSAs(regionId);
+            if (fsas && fsas.length > 0) {
+              map[regionId] = fsas;
+              hasDbData = true;
+              console.log(`📦 加载区域 ${regionId} FSA数据:`, fsas.length, '个');
+
+              // 同时获取区域配置中的颜色
+              try {
+                const config = await getRegionConfig(regionId);
+                if (config) {
+                  colors[regionId] = config.displayColor || config.color || '#3B82F6';
+                  console.log(`🎨 区域 ${regionId} 颜色:`, colors[regionId]);
+                }
+              } catch (colorError) {
+                colors[regionId] = '#3B82F6'; // 默认蓝色
+              }
+            }
+          } catch (error) {
+            console.log(`区域 ${regionId} 暂无数据库数据`);
+          }
+        }
+      }
+
+      // 更新区域颜色状态
+      if (Object.keys(colors).length > 0) {
+        setRegionColors(prev => ({ ...prev, ...colors }));
+      }
+
       // 如果数据库有数据，合并到testRegionFSAs；否则继续使用testRegionFSAs
       if (hasDbData) {
         // 合并数据库数据和默认数据（数据库优先）
@@ -74,7 +107,7 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
       }
     };
     loadRegionFSAsMap();
-  }, [visibleRegions]); // 当可见区域变化时重新加载
+  }, [visibleRegions, selectedRegions]); // 当可见区域或选中区域变化时重新加载
 
   // 当内部selectedRegions变化时，通知父组件
   useEffect(() => {
@@ -302,17 +335,6 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     };
   }, [onFSAClick, mapInstance, mapData]);
 
-  // 监听外部传入的FSA数据变化
-  useEffect(() => {
-    if (deliverableFSAs && deliverableFSAs.length > 0) {
-      setCurrentDeliverableFSAs(deliverableFSAs);
-    } else {
-      // 使用默认数据
-      import('../data/deliverableFSA.js').then(module => {
-        setCurrentDeliverableFSAs(module.deliverableFSAs);
-      });
-    }
-  }, [deliverableFSAs]);
 
   // 监听数据更新通知
   useEffect(() => {
@@ -339,56 +361,23 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   }, [selectedRegions]);
 
   useEffect(() => {
-    // 动态加载新的完整FSA数据文件
+    // 使用新的统一FSA数据接口
     const loadFSAData = async () => {
       try {
-        console.log('🚀 开始加载完整FSA边界数据...');
+        console.log('🚀 开始加载FSA边界数据...');
         setLoading(true);
-        
-        // 添加超时控制，避免长时间等待
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
-        
-        const response = await fetch('/data/canada_fsa_boundaries_complete.json', {
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP错误: ${response.status} - ${response.statusText}`);
-        }
-        
-        // 检查Content-Length来显示进度
-        const contentLength = response.headers.get('Content-Length');
-        if (contentLength) {
-          console.log(`📦 文件大小: ${(parseInt(contentLength) / 1024 / 1024).toFixed(2)}MB`);
-        }
-        
-        const fsaBoundariesData = await response.json();
+
+        // 直接使用导入的getFSAGeoJSON函数获取数据
+        const fsaBoundariesData = getFSAGeoJSON();
+
         console.log('✅ FSA数据加载成功:', {
           features: fsaBoundariesData.features?.length || 0,
           type: fsaBoundariesData.type
         });
-        
+
         if (fsaBoundariesData && fsaBoundariesData.features) {
-          // 首先过滤只保留可配送的FSA（来自deliverableFSA.js的列表）
-          const deliverableFSASet = new Set(currentDeliverableFSAs);
-          const deliverableFeatures = fsaBoundariesData.features.filter(feature => {
-            const fsaCode = feature.properties?.CFSAUID;
-            return fsaCode && deliverableFSASet.has(fsaCode);
-          });
-          
-          console.log(`🚚 可配送FSA过滤: ${fsaBoundariesData.features.length} -> ${deliverableFeatures.length} 个FSA`);
-          
-          // 创建只包含可配送FSA的数据对象
-          const deliverableData = {
-            ...fsaBoundariesData,
-            features: deliverableFeatures
-          };
-          
-          // 然后根据选中的区域进一步过滤
-          const processed = await filterMapDataByDeliveryArea(deliverableData, selectedRegions);
+          // 根据选中的区域进行过滤
+          const processed = await filterMapDataByDeliveryArea(fsaBoundariesData, selectedRegions);
 
           console.log('🎯 配送区域筛选完成:', processed.features.length, '个FSA区域');
           console.log('📊 筛选统计:', processed.metadata);
@@ -403,40 +392,16 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         }
       } catch (error) {
         console.error('❌ 加载FSA数据失败:', error);
-        
-        // 根据错误类型提供不同的处理方式
-        if (error.name === 'AbortError') {
-          console.error('⏰ 请求超时，文件可能过大');
-        } else if (error.message.includes('404')) {
-          console.error('📁 数据文件不存在，检查文件路径');
-        } else if (error.message.includes('Failed to fetch')) {
-          console.error('🌐 网络连接问题，请检查服务器状态');
-        }
-        
-        // 尝试加载备用数据文件
-        console.log('🔄 尝试加载备用数据文件...');
-        try {
-          const fallbackResponse = await fetch('/data/canada_fsa_boundaries.json');
-          if (fallbackResponse.ok) {
-            const fallbackData = await fallbackResponse.json();
-            console.log('✅ 备用数据加载成功');
-            setMapData(fallbackData);
-          } else {
-            throw new Error('备用数据也无法加载');
-          }
-        } catch (fallbackError) {
-          console.error('❌ 备用数据加载失败:', fallbackError);
-          setMapData({ type: 'FeatureCollection', features: [] });
-        }
+        // 设置空数据作为fallback
+        setMapData({ type: 'FeatureCollection', features: [] });
       } finally {
         setLoading(false);
       }
     };
 
-    if (currentDeliverableFSAs.length > 0) {
-      loadFSAData();
-    }
-  }, [currentDeliverableFSAs, selectedRegions]);
+    // 不再需要检查currentcompleteFSAData，因为数据直接从模块导入
+    loadFSAData();
+  }, [selectedRegions]);
 
   // 根据FSA前缀判断省份
   const getProvinceFromFSA = (fsa) => {
@@ -906,9 +871,11 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
   const styleFeature = (feature) => {
     const fsaCode = feature.properties.CFSAUID;
     const isVisible = filteredFSAs.includes(fsaCode);
+    const isHighlighted = highlightedFSAs.includes(fsaCode); // 检查是否被高亮
 
     // 根据FSA获取所属区域的颜色
-    let fillColor = '#6B7280'; // 默认灰色（未分配区域）
+    let fillColor = null; // 默认无颜色（未分配区域将透明显示）
+    let isAssigned = false; // 标记FSA是否已分配到区域
 
     // 优先从regionFSAsMap查找（如果已加载）
     if (Object.keys(regionFSAsMap).length > 0) {
@@ -917,6 +884,14 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
           const region = DEFAULT_REGIONS.find(r => r.id === regionId);
           if (region) {
             fillColor = region.color;
+            isAssigned = true;
+          } else {
+            // 对于UUID格式的区域（卡车配送区域），使用存储的颜色或默认颜色
+            fillColor = regionColors[regionId] || '#3B82F6'; // 使用存储的颜色或默认蓝色
+            isAssigned = true;
+            if (!regionColors[regionId]) {
+              console.log(`📍 FSA ${fsaCode} 属于区域 ${regionId}，使用默认颜色`);
+            }
           }
           break;
         }
@@ -928,18 +903,44 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
           const region = DEFAULT_REGIONS.find(r => r.id === regionId);
           if (region) {
             fillColor = region.color;
+            isAssigned = true;
           }
           break;
         }
       }
     }
 
+    // 如果被高亮，使用特殊样式
+    if (isHighlighted) {
+      return {
+        fillColor: '#FFD700', // 金色高亮
+        weight: 3,
+        opacity: 1,
+        color: '#FF6B6B', // 红色边框
+        fillOpacity: 0.7,
+        className: 'fsa-polygon-highlighted'
+      };
+    }
+
+    // 对于未分配的FSA，使用完全透明或极淡的边框
+    if (!isAssigned) {
+      return {
+        fillColor: 'transparent', // 完全透明的填充
+        weight: 0.5, // 很细的边框
+        opacity: 0.2, // 很低的边框透明度
+        color: '#d1d5db', // 淡灰色边框
+        fillOpacity: 0, // 完全透明的填充
+        className: 'fsa-polygon-unassigned'
+      };
+    }
+
+    // 已分配区域的正常显示
     return {
       fillColor: fillColor,
       weight: isVisible ? 2 : 1,
       opacity: isVisible ? 1 : 0.3,
       color: '#ffffff',
-      fillOpacity: isVisible ? 0.6 : 0.2,
+      fillOpacity: isVisible ? 0.8 : 0.2,  // 提高透明度从0.6到0.8，改善1区蓝色显示效果
       className: 'fsa-polygon'
     };
   };
@@ -976,17 +977,27 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
     // 统一的点击事件处理 - 聚焦到FSA周围区域并显示报价单
     layer.on('click', function(e) {
       console.log('🎯 FSA点击事件:', fsaCode);
-      
+
       // 设置用户交互状态，阻止自动控制逻辑干扰
       setIsUserInteracting(true);
       console.log('🔒 用户交互状态已锁定，自动控制已禁用');
-      
+
       // 显示固定报价单面板
       setSelectedFSAForQuotation({
         fsaCode,
         province,
         region
       });
+
+      // 调用父组件的点击回调（用于显示价格面板）
+      if (onFSAClick) {
+        onFSAClick({
+          fsaCode,
+          province,
+          region,
+          properties: feature.properties
+        });
+      }
 
       // 聚焦到点击的FSA及其周围区域
       if (mapInstance && mapInstance._container) {
@@ -1021,18 +1032,6 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
         }
       } else {
         console.log('⚠️ 地图实例未准备好，无法聚焦FSA');
-      }
-
-      // 通知父组件（如果需要）
-      if (onFSAClick) {
-        onFSAClick({
-          fsaCode,
-          province,
-          region,
-          properties: feature.properties,
-          // 添加标志表示这是地图内部处理的点击
-          internalClick: true
-        });
       }
     });
   };
@@ -1334,7 +1333,7 @@ const AccurateFSAMap = ({ searchQuery, selectedProvince = 'all', deliverableFSAs
                 {/* 渲染真实的FSA边界 */}
                 {filteredData && (
                   <GeoJSON
-                    key={`geojson-${filteredFSAs.length}-${selectedProvince}-${JSON.stringify(selectedFilters)}`}
+                    key={`geojson-${filteredFSAs.length}-${selectedProvince}-${JSON.stringify(selectedFilters)}-${JSON.stringify(highlightedFSAs)}`}
                     data={filteredData}
                     style={styleFeature}
                     onEachFeature={onEachFeature}

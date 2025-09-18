@@ -11,24 +11,26 @@ const pool = require('../config/pgDatabase');
 // 获取所有城市
 router.get('/cities', async (req, res) => {
   try {
-    const { includeStats = 'true', includeZones = 'false' } = req.query;
+    // 默认包含zones数据以确保区域数量显示正确
+    const { includeStats = 'true', includeZones = 'true' } = req.query;
     
     // 如果需要包含zones数据，获取完整信息
     if (includeZones === 'true') {
       const query = `
-        SELECT 
+        SELECT
           c.*,
           COALESCE(json_agg(
             json_build_object(
               'id', z.id,
               'name', z.name,
               'level', z.level,
-              'fsaCodes', z.fsa_codes,
+              'fsa_codes', z.fsa_codes,
               'color', z.color,
               'active_drivers', z.active_drivers,
               'daily_capacity', z.daily_capacity
             ) ORDER BY z.level, z.name
-          ) FILTER (WHERE z.id IS NOT NULL), '[]'::json) AS regions
+          ) FILTER (WHERE z.id IS NOT NULL), '[]'::json) AS zones,
+          COALESCE(COUNT(DISTINCT z.id) FILTER (WHERE z.id IS NOT NULL), 0) AS total_zones
         FROM truck_delivery_cities c
         LEFT JOIN truck_delivery_zones z ON c.id = z.city_id AND z.is_active = true
         WHERE c.is_active = true
@@ -360,7 +362,344 @@ router.delete('/cities/:id', async (req, res) => {
   }
 });
 
+// ==================== 定价配置管理 ====================
+
+// 获取定价配置
+router.get('/pricing-configs', async (req, res) => {
+  try {
+    const { cityId } = req.query;
+
+    const query = `
+      SELECT * FROM truck_pricing_configs
+      WHERE city_id = $1
+      ORDER BY priority DESC, updated_at DESC
+    `;
+
+    const result = await pool.query(query, [cityId]);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('获取定价配置失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: '获取定价配置失败' }
+    });
+  }
+});
+
+// 创建定价配置
+router.post('/pricing-configs', async (req, res) => {
+  try {
+    const config = req.body;
+
+    // 生成ID如果没有提供 - 使用更可靠的UUID生成方式
+    let configId = config.id;
+    if (!configId) {
+      // 生成唯一ID - 使用时间戳和随机数确保唯一性
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 11);
+      configId = `config_${timestamp}_${random}`;
+    }
+
+    // 确保ID不为空
+    if (!configId) {
+      throw new Error('无法生成配置ID');
+    }
+
+    console.log('创建定价配置 - 生成的ID:', configId);
+    console.log('创建定价配置 - 请求数据:', {
+      level: config.level,
+      targetId: config.targetId,
+      targetName: config.targetName,
+      mode: config.mode,
+      cityId: config.cityId
+    });
+
+    const query = `
+      INSERT INTO truck_pricing_configs (
+        id, level, target_id, target_name, mode, config,
+        priority, is_active, city_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      RETURNING *
+    `;
+
+    const values = [
+      configId,
+      config.level,
+      config.targetId,
+      config.targetName,
+      config.mode,
+      JSON.stringify(config.config),
+      config.priority || 0,
+      config.isActive !== false,
+      config.cityId || config.targetId // 如果是城市级别，使用targetId作为cityId
+    ];
+
+    console.log('SQL插入参数:', values.map((v, i) => `$${i+1}: ${v}`));
+
+    const result = await pool.query(query, values);
+
+    console.log('定价配置创建成功:', result.rows[0].id);
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('创建定价配置失败 - 详细错误:', error);
+    console.error('错误堆栈:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: { code: 'CREATE_ERROR', message: '创建定价配置失败' }
+    });
+  }
+});
+
+// 更新定价配置
+router.put('/pricing-configs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const config = req.body;
+
+    const query = `
+      UPDATE truck_pricing_configs
+      SET level = $2, target_id = $3, target_name = $4,
+          mode = $5, config = $6, priority = $7,
+          is_active = $8, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `;
+
+    const values = [
+      id,
+      config.level,
+      config.targetId,
+      config.targetName,
+      config.mode,
+      JSON.stringify(config.config),
+      config.priority || 0,
+      config.isActive !== false
+    ];
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: '定价配置不存在' }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('更新定价配置失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'UPDATE_ERROR', message: '更新定价配置失败' }
+    });
+  }
+});
+
+// 删除定价配置
+router.delete('/pricing-configs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = 'DELETE FROM truck_pricing_configs WHERE id = $1 RETURNING id';
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: '定价配置不存在' }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '定价配置已删除'
+    });
+  } catch (error) {
+    console.error('删除定价配置失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'DELETE_ERROR', message: '删除定价配置失败' }
+    });
+  }
+});
+
+// ==================== 分组管理 ====================
+
+// 获取区域的所有分组
+router.get('/zones/:zoneId/groups', async (req, res) => {
+  try {
+    const { zoneId } = req.params;
+
+    const query = `
+      SELECT
+        g.*,
+        z.name as zone_name,
+        z.city_id,
+        c.name as city_name
+      FROM truck_zone_fsa_groups g
+      LEFT JOIN truck_delivery_zones z ON g.zone_id = z.id
+      LEFT JOIN truck_delivery_cities c ON z.city_id = c.id
+      WHERE g.zone_id = $1
+      ORDER BY g.name
+    `;
+
+    const result = await pool.query(query, [zoneId]);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('获取分组列表失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: '获取分组列表失败' }
+    });
+  }
+});
+
+// 获取单个分组详情
+router.get('/groups/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const query = `
+      SELECT
+        g.*,
+        z.name as zone_name,
+        z.city_id,
+        c.name as city_name,
+        COALESCE(
+          (SELECT json_agg(json_build_object(
+            'skid_count', sp.skid_count,
+            'price', sp.price
+          ) ORDER BY sp.skid_count)
+          FROM truck_zone_group_skid_pricing sp
+          WHERE sp.city_id = z.city_id
+            AND sp.zone_id = g.zone_id
+            AND sp.group_id = g.id
+          ), '[]'::json
+        ) as skid_pricing
+      FROM truck_zone_fsa_groups g
+      LEFT JOIN truck_delivery_zones z ON g.zone_id = z.id
+      LEFT JOIN truck_delivery_cities c ON z.city_id = c.id
+      WHERE g.id = $1
+    `;
+
+    const result = await pool.query(query, [groupId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: '分组不存在' }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('获取分组详情失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: '获取分组详情失败' }
+    });
+  }
+});
+
 // ==================== 区域管理 ====================
+
+// 获取所有区域（支持按城市过滤）
+router.get('/zones', async (req, res) => {
+  try {
+    const { city_id } = req.query;
+
+    let query = `
+      SELECT z.*, c.name as city_name, c.province
+      FROM truck_delivery_zones z
+      JOIN truck_delivery_cities c ON z.city_id = c.id
+      WHERE z.is_active = true
+    `;
+    const params = [];
+
+    if (city_id) {
+      query += ' AND z.city_id = $1';
+      params.push(city_id);
+    }
+
+    query += ' ORDER BY z.level, z.name';
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('获取区域列表失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: '获取区域列表失败' }
+    });
+  }
+});
+
+// 获取所有FSA分组（支持按城市过滤）
+router.get('/fsa-groups', async (req, res) => {
+  try {
+    const { city_id } = req.query;
+
+    let query = `
+      SELECT
+        g.*,
+        z.city_id,
+        c.name as city_name,
+        z.name as zone_name,
+        true as is_active
+      FROM truck_zone_fsa_groups g
+      LEFT JOIN truck_delivery_zones z ON g.zone_id = z.id
+      LEFT JOIN truck_delivery_cities c ON z.city_id = c.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (city_id) {
+      query += ' AND z.city_id = $1';
+      params.push(city_id);
+    }
+
+    query += ' ORDER BY g.name';
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('获取FSA分组列表失败:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: '获取FSA分组列表失败' }
+    });
+  }
+});
 
 // 获取城市的所有区域
 router.get('/cities/:cityId/zones', async (req, res) => {
@@ -402,6 +741,9 @@ router.get('/zones/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // 修改为使用板数价格表 skid_pricing
+    // 注意：板数价格表中的 zone_id 使用 "区域1", "区域2" 等格式
+    // 需要通过 level 字段来匹配
     const query = `
       SELECT
         z.*,
@@ -409,15 +751,21 @@ router.get('/zones/:id', async (req, res) => {
         c.province,
         COALESCE(json_agg(
           json_build_object(
-            'id', p.id,
-            'min_weight', p.min_weight,
-            'max_weight', p.max_weight,
-            'price', p.price
-          ) ORDER BY p.min_weight
-        ) FILTER (WHERE p.id IS NOT NULL), '[]'::json) AS prices
+            'skid_count', sp.skid_count,
+            'price', sp.price,
+            'currency', sp.currency
+          ) ORDER BY sp.skid_count
+        ) FILTER (WHERE sp.id IS NOT NULL), '[]'::json) AS prices
       FROM truck_delivery_zones z
       JOIN truck_delivery_cities c ON z.city_id = c.id
-      LEFT JOIN truck_zone_prices p ON z.id = p.zone_id
+      LEFT JOIN skid_pricing sp ON (
+                                      sp.zone_id = z.id
+                                      OR sp.zone_id = z.name
+                                      OR sp.zone_id = '区域' || z.level::text
+                                      OR sp.zone_id = 'Zone ' || z.level::text
+                                    )
+                                 AND sp.city_id = c.id
+                                 AND sp.is_active = true
       WHERE z.id = $1
       GROUP BY z.id, z.city_id, z.name, z.level, z.fsa_codes, z.color,
                z.display_color, z.active_drivers, z.daily_capacity, z.is_active,
@@ -476,10 +824,12 @@ router.post('/zones', async (req, res) => {
       boundaries,
       coverage_area,
       coverage_population,
-      avg_delivery_time = 2.5,
+      avg_delivery_time = 3,
       daily_capacity = 100,
       active_drivers = 5,
-      color = '#3B82F6'
+      color = '#3B82F6',
+      metadata = {},
+      is_active = true
     } = req.body;
     
     if (!city_id || !name) {
@@ -489,18 +839,18 @@ router.post('/zones', async (req, res) => {
       });
     }
     
-    // 创建区域
+    // 创建区域 - 使用实际的表 truck_delivery_regions
     const zoneQuery = `
-      INSERT INTO truck_delivery_zones 
-        (city_id, name, level, fsa_codes, boundaries, coverage_area, 
-         coverage_population, avg_delivery_time, daily_capacity, active_drivers, color)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO truck_delivery_regions
+        (city_id, name, level, fsa_codes, boundaries, coverage_area,
+         coverage_population, avg_delivery_time, daily_capacity, active_drivers, color, metadata, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
     
     const zoneResult = await client.query(zoneQuery, [
       city_id, name, level, fsa_codes, boundaries, coverage_area,
-      coverage_population, avg_delivery_time, daily_capacity, active_drivers, color
+      coverage_population, avg_delivery_time, daily_capacity, active_drivers, color, metadata, is_active
     ]);
     
     // 更新城市统计
@@ -572,8 +922,8 @@ router.put('/zones/:id', async (req, res) => {
     
     values.push(id);
     const query = `
-      UPDATE truck_delivery_regions
-      SET ${fields.join(', ')}
+      UPDATE truck_delivery_zones
+      SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP
       WHERE id = $${paramCount}
       RETURNING *
     `;
@@ -695,25 +1045,48 @@ router.delete('/zones/:id', async (req, res) => {
   }
 });
 
-// ==================== 价格管理 ====================
+// ==================== 价格管理（已废弃，使用板数价格系统） ====================
+// 注意：这些API已废弃，统一使用 /skid-pricing 相关API处理价格
+// 保留这些端点以保持向后兼容，但重定向到板数价格系统
 
-// 获取区域价格表
+// 获取区域价格表（重定向到板数价格）
 router.get('/zones/:zoneId/prices', async (req, res) => {
   try {
     const { zoneId } = req.params;
-    
+
+    // 获取区域对应的城市信息
+    const zoneResult = await pool.query(
+      'SELECT city_id FROM truck_delivery_zones WHERE id = $1',
+      [zoneId]
+    );
+
+    if (zoneResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: '区域不存在' }
+      });
+    }
+
+    const cityId = zoneResult.rows[0].city_id;
+
+    // 从板数价格表获取价格
     const query = `
-      SELECT * FROM truck_zone_prices
-      WHERE zone_id = $1
-      ORDER BY min_weight
+      SELECT
+        skid_count,
+        price,
+        currency
+      FROM skid_pricing
+      WHERE city_id = $1 AND zone_id = $2 AND is_active = true
+      ORDER BY skid_count
     `;
-    
-    const result = await pool.query(query, [zoneId]);
-    
+
+    const result = await pool.query(query, [cityId, zoneId]);
+
     res.json({
       success: true,
       data: result.rows,
-      count: result.rows.length
+      count: result.rows.length,
+      message: '注意：价格系统已迁移到板数价格，请使用 /skid-pricing API'
     });
   } catch (error) {
     console.error('获取价格表失败:', error);
@@ -724,66 +1097,16 @@ router.get('/zones/:zoneId/prices', async (req, res) => {
   }
 });
 
-// 批量更新价格
+// 批量更新价格（重定向到板数价格系统）
 router.put('/zones/:zoneId/prices', async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const { zoneId } = req.params;
-    const { prices } = req.body;
-    
-    if (!Array.isArray(prices)) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: '价格数据必须是数组' }
-      });
+  // 该API已废弃，返回提示信息
+  res.status(410).json({
+    success: false,
+    error: {
+      code: 'DEPRECATED',
+      message: '该API已废弃，请使用 PUT /skid-pricing/:cityId/:zoneId 更新板数价格'
     }
-    
-    // 删除现有价格
-    await client.query('DELETE FROM truck_zone_prices WHERE zone_id = $1', [zoneId]);
-    
-    // 插入新价格
-    for (const price of prices) {
-      await client.query(`
-        INSERT INTO truck_zone_prices 
-          (zone_id, weight_range_id, min_weight, max_weight, label, price, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [
-        zoneId,
-        price.weight_range_id,
-        price.min_weight,
-        price.max_weight,
-        price.label,
-        price.price,
-        price.is_active !== false
-      ]);
-    }
-    
-    await client.query('COMMIT');
-    
-    // 返回更新后的价格表
-    const result = await client.query(
-      'SELECT * FROM truck_zone_prices WHERE zone_id = $1 ORDER BY min_weight',
-      [zoneId]
-    );
-    
-    res.json({
-      success: true,
-      data: result.rows,
-      count: result.rows.length
-    });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('更新价格表失败:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'UPDATE_ERROR', message: '更新价格表失败' }
-    });
-  } finally {
-    client.release();
-  }
+  });
 });
 
 // ==================== 搜索功能 ====================

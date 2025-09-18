@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>配置加拿大配送区域</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            transform: scale(1.05);
+            transition: transform 0.2s;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .region-info {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .region-info h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .region-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .region-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+        .region-card h4 {
+            margin: 0 0 10px 0;
+            color: #667eea;
+        }
+        .fsa-count {
+            color: #666;
+            font-size: 14px;
+        }
+        .group-list {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .group-item {
+            margin-left: 15px;
+            margin-top: 5px;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .warning {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚚 加拿大配送区域配置工具</h1>
+        <p class="subtitle">一键配置 Alberta、British Columbia 和 Manitoba 的所有配送区域</p>
+
+        <div class="region-info">
+            <h3>将要配置的区域：</h3>
+            <div class="region-list">
+                <div class="region-card">
+                    <h4>🏔️ Alberta (AB)</h4>
+                    <div class="fsa-count">4个配送区域</div>
+                    <div class="group-list">
+                        <div class="group-item">• Zone 1: Calgary (31 FSAs)</div>
+                        <div class="group-item">• Zone 2: Calgary Remote (15 FSAs)</div>
+                        <div class="group-item">• Zone 3: Edmonton & Red Deer (52 FSAs)</div>
+                        <div class="group-item">• Zone 4: Edmonton Surrounding (5 FSAs)</div>
+                    </div>
+                </div>
+
+                <div class="region-card">
+                    <h4>🌲 British Columbia (BC)</h4>
+                    <div class="fsa-count">5个配送区域</div>
+                    <div class="group-list">
+                        <div class="group-item">• Zone 1: Richmond & New Westminster (10 FSAs)</div>
+                        <div class="group-item">• Zone 2: Vancouver & North Shore (50+ FSAs)</div>
+                        <div class="group-item">• Zone 3: Surrey & Coquitlam (18 FSAs)</div>
+                        <div class="group-item">• Zone 4: Fraser Valley (10 FSAs)</div>
+                        <div class="group-item">• Zone 5: Interior & Island (30+ FSAs)</div>
+                    </div>
+                </div>
+
+                <div class="region-card">
+                    <h4>🌾 Manitoba (MB)</h4>
+                    <div class="fsa-count">1个配送区域</div>
+                    <div class="group-list">
+                        <div class="group-item">• Winnipeg (35 FSAs)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button id="setupBtn" onclick="startSetup()">
+                🚀 开始配置所有区域
+            </button>
+            <button onclick="window.location.href='http://localhost:3001'">
+                🏠 返回主应用
+            </button>
+            <button onclick="clearStatus()">
+                🧹 清除日志
+            </button>
+        </div>
+
+        <div id="status">等待操作...</div>
+    </div>
+
+    <script type="module">
+        import { setupOptimizedRegions } from './src/utils/setupRegionsOptimized.js';
+
+        let isRunning = false;
+
+        window.startSetup = async function() {
+            if (isRunning) {
+                updateStatus('配置正在进行中，请稍候...', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('setupBtn');
+            btn.disabled = true;
+            isRunning = true;
+
+            updateStatus('🔄 开始配置区域...', 'info');
+
+            try {
+                // 捕获控制台输出
+                const originalLog = console.log;
+                const originalError = console.error;
+
+                console.log = function(...args) {
+                    originalLog.apply(console, args);
+                    updateStatus(args.join(' '), 'info');
+                };
+
+                console.error = function(...args) {
+                    originalError.apply(console, args);
+                    updateStatus(args.join(' '), 'error');
+                };
+
+                const success = await setupOptimizedRegions();
+
+                // 恢复原始控制台函数
+                console.log = originalLog;
+                console.error = originalError;
+
+                if (success) {
+                    updateStatus('\n✅ 配置完成！所有区域已成功设置。', 'success');
+                    updateStatus('您可以返回主应用查看配置结果。', 'success');
+                } else {
+                    updateStatus('\n❌ 配置过程中出现错误，请检查控制台日志。', 'error');
+                }
+            } catch (error) {
+                updateStatus('\n❌ 配置失败: ' + error.message, 'error');
+                console.error('配置错误:', error);
+            } finally {
+                btn.disabled = false;
+                isRunning = false;
+            }
+        };
+
+        window.updateStatus = function(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+
+            let prefix = '';
+            let className = '';
+
+            switch(type) {
+                case 'success':
+                    prefix = '✅';
+                    className = 'success';
+                    break;
+                case 'error':
+                    prefix = '❌';
+                    className = 'error';
+                    break;
+                case 'warning':
+                    prefix = '⚠️';
+                    className = 'warning';
+                    break;
+                default:
+                    prefix = 'ℹ️';
+                    className = '';
+            }
+
+            const formattedMessage = `[${timestamp}] ${message}`;
+
+            if (className) {
+                statusDiv.innerHTML += `<span class="${className}">${formattedMessage}</span>\n`;
+            } else {
+                statusDiv.innerHTML += formattedMessage + '\n';
+            }
+
+            // 自动滚动到底部
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        };
+
+        window.clearStatus = function() {
+            document.getElementById('status').innerHTML = '等待操作...';
+        };
+    </script>
+</body>
+</html>

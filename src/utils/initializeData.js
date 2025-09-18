@@ -3,7 +3,7 @@
  * 用于在 Vercel 部署后初始化基础数据
  */
 
-import { deliverableFSAs } from '../data/deliverableFSA';
+import { completeFSAData } from '../data/canadaFSAData';
 import { saveRegionConfig } from './unifiedStorage';
 
 // 默认的区域FSA分配
@@ -11,7 +11,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '1': {
     id: '1',
     name: '1区',
-    fsaCodes: deliverableFSAs.slice(0, 260), // 前260个FSA分配给1区
+    fsaCodes: completeFSAData.slice(0, 260), // 前260个FSA分配给1区
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 15.99, isActive: true },
@@ -24,7 +24,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '2': {
     id: '2',
     name: '2区',
-    fsaCodes: deliverableFSAs.slice(260, 400), // 接下来140个FSA给2区
+    fsaCodes: completeFSAData.slice(260, 400), // 接下来140个FSA给2区
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 18.99, isActive: true },
@@ -37,7 +37,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '3': {
     id: '3',
     name: '3区',
-    fsaCodes: deliverableFSAs.slice(400, 500),
+    fsaCodes: completeFSAData.slice(400, 500),
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 22.99, isActive: true },
@@ -50,7 +50,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '4': {
     id: '4',
     name: '4区',
-    fsaCodes: deliverableFSAs.slice(500, 646), // 分配146个FSA给4区
+    fsaCodes: completeFSAData.slice(500, 646), // 分配146个FSA给4区
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 24.99, isActive: true },
@@ -63,7 +63,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '5': {
     id: '5',
     name: '5区',
-    fsaCodes: deliverableFSAs.slice(646, 678), // 分配32个FSA给5区
+    fsaCodes: completeFSAData.slice(646, 678), // 分配32个FSA给5区
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 26.99, isActive: true },
@@ -76,7 +76,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '6': {
     id: '6',
     name: '6区',
-    fsaCodes: deliverableFSAs.slice(678, 678), // 暂时没有分配FSA
+    fsaCodes: completeFSAData.slice(678, 678), // 暂时没有分配FSA
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 28.99, isActive: true },
@@ -89,7 +89,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '7': {
     id: '7',
     name: '7区',
-    fsaCodes: deliverableFSAs.slice(678, 678), // 暂时没有分配FSA
+    fsaCodes: completeFSAData.slice(678, 678), // 暂时没有分配FSA
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 30.99, isActive: true },
@@ -102,7 +102,7 @@ const DEFAULT_REGION_ASSIGNMENTS = {
   '8': {
     id: '8',
     name: '8区',
-    fsaCodes: deliverableFSAs.slice(678, 678), // 暂时没有分配FSA
+    fsaCodes: completeFSAData.slice(678, 678), // 暂时没有分配FSA
     postalCodes: [],
     weightRanges: [
       { id: '0-10', min: 0, max: 10, price: 32.99, isActive: true },

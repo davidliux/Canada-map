@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>配置卡车配送区域 - Truck Delivery Regions</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .info-box {
+            background: #f0f9ff;
+            border: 1px solid #0284c7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            color: #0284c7;
+            margin-top: 0;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .button-secondary {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+        .button-danger {
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a1a1a;
+            color: #0f0;
+            border-radius: 6px;
+            min-height: 150px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            border: 1px solid #333;
+        }
+        .region-preview {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .province-card {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #d1d5db;
+        }
+        .province-card h3 {
+            margin-top: 0;
+            color: #4b5563;
+            border-bottom: 2px solid #9ca3af;
+            padding-bottom: 10px;
+        }
+        .city-section {
+            margin-top: 15px;
+        }
+        .city-header {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #ffffff;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .zone-item {
+            margin-left: 20px;
+            padding: 6px 12px;
+            background: #ffffff;
+            border-left: 3px solid #6366f1;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .zone-level {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #ddd6fe;
+            color: #5b21b6;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .fsa-count {
+            color: #6b7280;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #6366f1;
+        }
+        .stat-label {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .success {
+            color: #10b981;
+        }
+        .error {
+            color: #ef4444;
+        }
+        .warning {
+            color: #f59e0b;
+        }
+        .info {
+            color: #3b82f6;
+        }
+        .icon {
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <span class="icon">🚛</span>
+            卡车配送区域配置系统
+            <span style="font-size: 14px; color: #6b7280; font-weight: normal;">(Truck Delivery Regions)</span>
+        </h1>
+        <p class="subtitle">配置卡车配送系统的城市和区域数据，直接写入 PostgreSQL 数据库</p>
+
+        <div class="info-box">
+            <h3>📌 重要说明</h3>
+            <ul style="margin: 5px 0;">
+                <li>此配置将数据写入 <strong>truck_delivery_regions</strong> 表</li>
+                <li>系统会自动创建城市（Cities）和区域（Zones）</li>
+                <li>每个区域包含FSA分组（FSA Groups）信息</li>
+                <li>如果城市或区域已存在，将更新其配置</li>
+            </ul>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">3</div>
+                <div class="stat-label">省份</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">5</div>
+                <div class="stat-label">城市</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">8</div>
+                <div class="stat-label">配送区域</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">200+</div>
+                <div class="stat-label">FSA代码</div>
+            </div>
+        </div>
+
+        <div class="region-preview">
+            <div class="province-card">
+                <h3>🏔️ Alberta (AB)</h3>
+                <div class="city-section">
+                    <div class="city-header">
+                        <span>📍</span>
+                        <span>Calgary</span>
+                    </div>
+                    <div class="zone-item">
+                        Downtown & Central
+                        <span class="zone-level">Level 1</span>
+                        <span class="fsa-count">29 FSAs</span>
+                    </div>
+                    <div class="zone-item">
+                        Remote & Surrounding
+                        <span class="zone-level">Level 2</span>
+                        <span class="fsa-count">15 FSAs</span>
+                    </div>
+                </div>
+                <div class="city-section">
+                    <div class="city-header">
+                        <span>📍</span>
+                        <span>Edmonton</span>
+                    </div>
+                    <div class="zone-item">
+                        Core & Central Alberta
+                        <span class="zone-level">Level 1</span>
+                        <span class="fsa-count">45 FSAs</span>
+                    </div>
+                    <div class="zone-item">
+                        Edmonton Region
+                        <span class="zone-level">Level 2</span>
+                        <span class="fsa-count">6 FSAs</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="province-card">
+                <h3>🌲 British Columbia (BC)</h3>
+                <div class="city-section">
+                    <div class="city-header">
+                        <span>📍</span>
+                        <span>Vancouver</span>
+                    </div>
+                    <div class="zone-item">
+                        Metro Vancouver Core
+                        <span class="zone-level">Level 1</span>
+                        <span class="fsa-count">44 FSAs</span>
+                    </div>
+                    <div class="zone-item">
+                        North Shore & Surrey
+                        <span class="zone-level">Level 2</span>
+                        <span class="fsa-count">25 FSAs</span>
+                    </div>
+                    <div class="zone-item">
+                        Fraser Valley
+                        <span class="zone-level">Level 3</span>
+                        <span class="fsa-count">21 FSAs</span>
+                    </div>
+                </div>
+                <div class="city-section">
+                    <div class="city-header">
+                        <span>📍</span>
+                        <span>Victoria & Interior</span>
+                    </div>
+                    <div class="zone-item">
+                        BC Interior & Island
+                        <span class="zone-level">Level 1</span>
+                        <span class="fsa-count">33 FSAs</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="province-card">
+                <h3>🌾 Manitoba (MB)</h3>
+                <div class="city-section">
+                    <div class="city-header">
+                        <span>📍</span>
+                        <span>Winnipeg</span>
+                    </div>
+                    <div class="zone-item">
+                        Winnipeg Metropolitan
+                        <span class="zone-level">Level 1</span>
+                        <span class="fsa-count">35 FSAs</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button id="setupBtn" onclick="startSetup()">
+                🚀 开始配置卡车配送区域
+            </button>
+            <button class="button-secondary" onclick="window.location.href='http://localhost:5002/management/truck-delivery'">
+                📊 查看卡车配送管理
+            </button>
+            <button onclick="window.location.href='http://localhost:5002'">
+                🏠 返回主应用
+            </button>
+            <button class="button-danger" onclick="clearStatus()">
+                🧹 清除日志
+            </button>
+        </div>
+
+        <div id="status">系统就绪，等待操作...</div>
+    </div>
+
+    <script type="module">
+        import { setupTruckDeliveryRegions } from './src/utils/setupTruckDeliveryRegionsCorrect.js';
+
+        let isRunning = false;
+
+        window.startSetup = async function() {
+            if (isRunning) {
+                updateStatus('⚠️ 配置正在进行中，请稍候...', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('setupBtn');
+            btn.disabled = true;
+            isRunning = true;
+
+            updateStatus('🔄 开始配置卡车配送区域...', 'info');
+            updateStatus('📡 连接数据库 truck_delivery_regions...', 'info');
+
+            try {
+                // 捕获控制台输出
+                const originalLog = console.log;
+                const originalError = console.error;
+
+                console.log = function(...args) {
+                    originalLog.apply(console, args);
+                    const message = args.join(' ');
+                    if (message.includes('✅')) {
+                        updateStatus(message, 'success');
+                    } else if (message.includes('❌')) {
+                        updateStatus(message, 'error');
+                    } else if (message.includes('⚠️')) {
+                        updateStatus(message, 'warning');
+                    } else {
+                        updateStatus(message, 'info');
+                    }
+                };
+
+                console.error = function(...args) {
+                    originalError.apply(console, args);
+                    updateStatus('❌ ' + args.join(' '), 'error');
+                };
+
+                const results = await setupTruckDeliveryRegions();
+
+                // 恢复原始控制台函数
+                console.log = originalLog;
+                console.error = originalError;
+
+                updateStatus('\n' + '='.repeat(60), 'info');
+
+                if (results.failed.length === 0) {
+                    updateStatus('✅ 配置完成！所有区域已成功设置到数据库。', 'success');
+                } else {
+                    updateStatus('⚠️ 配置部分完成，有些项目失败。', 'warning');
+                }
+
+                updateStatus(`\n📊 最终统计:`, 'info');
+                updateStatus(`  城市: ${results.stats.totalCities}`, 'info');
+                updateStatus(`  区域: ${results.stats.totalZones}`, 'info');
+                updateStatus(`  FSAs: ${results.stats.totalFSAs}`, 'info');
+
+                if (results.failed.length > 0) {
+                    updateStatus(`\n❌ 失败项目: ${results.failed.length}`, 'error');
+                }
+
+                updateStatus('\n您可以点击"查看卡车配送管理"按钮查看配置结果。', 'success');
+
+            } catch (error) {
+                updateStatus('\n❌ 配置失败: ' + error.message, 'error');
+                console.error('配置错误:', error);
+            } finally {
+                btn.disabled = false;
+                isRunning = false;
+            }
+        };
+
+        window.updateStatus = function(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+
+            let prefix = '';
+            let className = type;
+
+            const formattedMessage = `[${timestamp}] ${message}`;
+
+            if (className) {
+                statusDiv.innerHTML += `<span class="${className}">${formattedMessage}</span>\n`;
+            } else {
+                statusDiv.innerHTML += formattedMessage + '\n';
+            }
+
+            // 自动滚动到底部
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        };
+
+        window.clearStatus = function() {
+            document.getElementById('status').innerHTML = '系统就绪，等待操作...';
+        };
+
+        // 页面加载时显示欢迎信息
+        window.addEventListener('load', () => {
+            updateStatus('🚛 卡车配送区域配置系统已就绪', 'info');
+            updateStatus('📍 目标数据库表: truck_delivery_regions', 'info');
+            updateStatus('✨ 点击"开始配置"按钮开始导入数据', 'info');
+        });
+    </script>
+</body>
+</html>

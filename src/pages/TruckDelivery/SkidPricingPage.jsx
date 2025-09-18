@@ -25,6 +25,8 @@ import { useNavigate } from 'react-router-dom';
 import SkidPricingMatrix from '../../components/pricing/skid/SkidPricingMatrix';
 import CustomPricingPanel from '../../components/pricing/skid/CustomPricingPanel';
 import FSAGroupPricingPanel from '../../components/pricing/skid/FSAGroupPricingPanel';
+import IntegratedPricingMatrix from '../../components/pricing/skid/IntegratedPricingMatrix';
+import PricingModeSelector from '../../components/pricing/PricingModeSelector';
 import cityStorageService from '../../utils/storage/cityStorage';
 import { dataUpdateNotifier } from '../../utils/dataUpdateNotifier';
 import pricingService from '../../services/pricingService';
@@ -40,7 +42,7 @@ const SkidPricingPage = () => {
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
   const [currentPricingData, setCurrentPricingData] = useState({});
-  const [pricingMode, setPricingMode] = useState('fixed'); // 'fixed', 'custom', or 'group'
+  const [pricingMode, setPricingMode] = useState('fixed'); // 'fixed', 'advanced'
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [zonePriceData, setZonePriceData] = useState({}); // 存储区域默认价格
 
@@ -209,8 +211,7 @@ const SkidPricingPage = () => {
                            focus:border-cyan-500 focus:outline-none"
                 >
                   <option value="fixed">固定价格</option>
-                  <option value="group">分组价格</option>
-                  <option value="custom">自定义规则</option>
+                  <option value="advanced">高级定价</option>
                 </select>
               </div>
               <button
@@ -252,7 +253,7 @@ const SkidPricingPage = () => {
                       <div>
                         <p className="text-white font-medium text-lg">{city.name}</p>
                         <p className="text-gray-400 text-sm mt-1">
-                          {city.regions?.length || 0} 区域
+                          {city.regionCount || 0} 区域
                         </p>
                       </div>
                       {selectedCity?.id === city.id && (
@@ -328,42 +329,21 @@ const SkidPricingPage = () => {
                   ))}
                 </div>
 
-                {/* 价格表格或自定义规则配置 */}
-                {pricingMode === 'fixed' ? (
-                  <SkidPricingMatrix
-                    cityId={selectedCity.id}
-                    zones={zones}
-                    selectedZoneIndex={selectedZoneIndex}
-                    onSave={handleSave}
-                    onExport={handleExport}
-                    onChange={(data) => {
-                      handlePriceChange(data);
-                      // 保存区域价格供分组使用
-                      if (zones[selectedZoneIndex]) {
-                        setZonePriceData(prev => ({
-                          ...prev,
-                          [zones[selectedZoneIndex].id]: data[zones[selectedZoneIndex].name] || data[`区域${selectedZoneIndex + 1}`]
-                        }));
-                      }
-                    }}
-                    locale="zh"
-                  />
-                ) : pricingMode === 'group' ? (
-                  <FSAGroupPricingPanel
-                    cityId={selectedCity.id}
-                    zone={zones[selectedZoneIndex]}
-                    zonePrice={zonePriceData[zones[selectedZoneIndex]?.id] || currentPricingData[zones[selectedZoneIndex]?.name] || currentPricingData[`区域${selectedZoneIndex + 1}`]}
-                    onSave={handleSave}
-                    onChange={handlePriceChange}
-                  />
-                ) : (
-                  <CustomPricingPanel
-                    cityId={selectedCity.id}
-                    zone={zones[selectedZoneIndex]}
-                    onSave={handleSave}
-                    onChange={handlePriceChange}
-                  />
-                )}
+                {/* 集成式价格配置界面 */}
+                <IntegratedPricingMatrix
+                  cityId={selectedCity.id}
+                  zone={zones[selectedZoneIndex]}
+                  mode={pricingMode === 'advanced' ? 'advanced' : 'fixed'}
+                  onSave={(data) => {
+                    setHasChanges(false);
+                    setSaveStatus('success');
+                    setTimeout(() => setSaveStatus(null), 3000);
+                  }}
+                  onChange={(data) => {
+                    handlePriceChange(data);
+                    setHasChanges(true);
+                  }}
+                />
               </div>
             ) : (
               <div className="h-full flex items-center justify-center">

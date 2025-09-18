@@ -13,7 +13,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Trash2, Edit3, Save, X, AlertTriangle, Check, MapPin, Hash, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import FSASelector from './FSASelector.jsx';
 import FSAGroupManager from '../regions/FSAGroupManager.jsx';
 import {
   createDefaultTruckRegion,
@@ -40,7 +39,6 @@ const CityRegionEditor = ({
   // 状态管理
   const [regions, setRegions] = useState(cityData?.regions || []);
   const [editingRegionId, setEditingRegionId] = useState(null);
-  const [showFSASelector, setShowFSASelector] = useState(null); // 显示FSA选择器的区域ID
   const [showFSAGroups, setShowFSAGroups] = useState(null); // 显示FSA组管理的区域ID
   const [validationErrors, setValidationErrors] = useState({});
   const [isDirty, setIsDirty] = useState(false);
@@ -51,25 +49,59 @@ const CityRegionEditor = ({
     return Math.max(...regions.map(r => r.level), 4); // 至少使用4级颜色分布
   }, [regions]);
 
-  // 同步外部数据变化
+  // 同步外部数据变化并加载FSA分组数据
   useEffect(() => {
-    const initialRegions = cityData?.regions || [];
-    // 确保每个区域都有displayColor
-    const regionsWithColors = initialRegions.map(region => {
-      if (!region.displayColor) {
-        return {
-          ...region,
-          displayColor: generateRegionColor(
+    const loadRegionsWithFSAGroups = async () => {
+      const initialRegions = cityData?.regions || [];
+
+      // 为每个区域加载FSA分组并确保有颜色
+      const regionsWithData = await Promise.all(initialRegions.map(async (region) => {
+        let updatedRegion = { ...region };
+
+        // 确保有displayColor
+        if (!updatedRegion.displayColor) {
+          updatedRegion.displayColor = generateRegionColor(
             region.level,
             cityData?.themeColor || '#2196F3',
             Math.max(initialRegions.length, 4)
-          )
-        };
-      }
-      return region;
-    });
-    setRegions(regionsWithColors);
-    setIsDirty(false);
+          );
+        }
+
+        // 加载FSA分组数据
+        try {
+          const { getRegionFSAGroups } = await import('../../utils/unifiedStorage');
+          const fsaGroups = await getRegionFSAGroups(region.id);
+
+          // 从所有分组中汇总FSA
+          const allFSAs = [];
+          if (fsaGroups && Array.isArray(fsaGroups)) {
+            fsaGroups.forEach(group => {
+              if (group.fsaCodes && Array.isArray(group.fsaCodes)) {
+                allFSAs.push(...group.fsaCodes);
+              }
+            });
+          }
+
+          // 如果从分组中获取到了FSA，使用它们；否则保留原有的fsaCodes
+          if (allFSAs.length > 0) {
+            updatedRegion.fsaCodes = allFSAs;
+          }
+
+          updatedRegion.fsaGroups = fsaGroups;
+        } catch (error) {
+          console.error(`加载区域 ${region.id} FSA分组失败:`, error);
+        }
+
+        return updatedRegion;
+      }));
+
+      setRegions(regionsWithData);
+      setIsDirty(false);
+    };
+
+    if (cityData?.regions) {
+      loadRegionsWithFSAGroups();
+    }
   }, [cityData?.regions, cityData?.themeColor]);
 
   // 可用的区域等级选项
@@ -142,10 +174,6 @@ const CityRegionEditor = ({
     if (editingRegionId === regionId) {
       setEditingRegionId(null);
     }
-    
-    if (showFSASelector === regionId) {
-      setShowFSASelector(null);
-    }
 
     // 通知父组件
     if (onCityChange) {
@@ -154,21 +182,21 @@ const CityRegionEditor = ({
         regions: updatedRegions
       });
     }
-  }, [regions, cityData, onCityChange, editingRegionId, showFSASelector]);
+  }, [regions, cityData, onCityChange, editingRegionId]);
 
   // 更新区域数据
-  const updateRegion = useCallback((regionId, updates) => {
-    const updatedRegions = regions.map(region => 
-      region.id === regionId 
-        ? { 
-            ...region, 
+  const updateRegion = useCallback((regionId, updates, skipNotification = false) => {
+    const updatedRegions = regions.map(region =>
+      region.id === regionId
+        ? {
+            ...region,
             ...updates,
-            displayColor: updates.level 
+            displayColor: updates.level
               ? generateRegionColor(
-                  updates.level, 
+                  updates.level,
                   cityData?.themeColor || '#2196F3',
                   Math.max(regions.length, 4) // 使用实际区域数计算颜色分布
-                ) 
+                )
               : region.displayColor,
             metadata: {
               ...(region.metadata || {}),
@@ -182,36 +210,16 @@ const CityRegionEditor = ({
     setRegions(updatedRegions);
     setIsDirty(true);
 
-    // 通知父组件
-    if (onCityChange) {
+    // 只有在不跳过通知且不在编辑模式时才通知父组件
+    // 编辑模式下的更改将在完成编辑时统一通知
+    if (!skipNotification && !editingRegionId && onCityChange) {
       onCityChange({
         ...cityData,
         regions: updatedRegions
       });
     }
-  }, [regions, cityData, onCityChange, maxLevel]);
+  }, [regions, cityData, onCityChange, maxLevel, editingRegionId]);
 
-  // 处理FSA选择变化 - 只更新本地状态，不立即通知父组件
-  const handleFSASelectionChange = useCallback((regionId, selectedFSAs) => {
-    // 只更新本地状态
-    const updatedRegions = regions.map(region =>
-      region.id === regionId
-        ? {
-            ...region,
-            fsaCodes: selectedFSAs,
-            metadata: {
-              ...(region.metadata || {}),
-              updatedAt: new Date().toISOString(),
-              version: ((region.metadata?.version) || 0) + 1
-            }
-          }
-        : region
-    );
-
-    setRegions(updatedRegions);
-    setIsDirty(true);
-    // 不调用 onCityChange，让用户继续选择
-  }, [regions]);
 
   // 验证区域数据
   const validateRegion = useCallback(async (region) => {
@@ -267,11 +275,38 @@ const CityRegionEditor = ({
     } else {
       alert('所有区域验证通过！');
 
-      // 验证成功后，通知父组件保存更改
+      // 验证成功后，先同步FSA数据，再通知父组件保存更改
       if (onCityChange) {
+        // 为每个区域同步FSA分组数据
+        const updatedRegions = await Promise.all(regions.map(async (region) => {
+          try {
+            const { getRegionFSAGroups } = await import('../../utils/unifiedStorage');
+            const fsaGroups = await getRegionFSAGroups(region.id);
+
+            // 从所有分组中汇总FSA
+            const allFSAs = [];
+            if (fsaGroups && Array.isArray(fsaGroups)) {
+              fsaGroups.forEach(group => {
+                if (group.fsaCodes && Array.isArray(group.fsaCodes)) {
+                  allFSAs.push(...group.fsaCodes);
+                }
+              });
+            }
+
+            return {
+              ...region,
+              fsaCodes: allFSAs,
+              fsaGroups: fsaGroups
+            };
+          } catch (error) {
+            console.error(`同步区域 ${region.id} FSA数据失败:`, error);
+            return region;
+          }
+        }));
+
         onCityChange({
           ...cityData,
-          regions: regions
+          regions: updatedRegions
         });
       }
       setIsDirty(false);
@@ -296,10 +331,18 @@ const CityRegionEditor = ({
           return;
         }
       }
+
+      // 编辑完成时通知父组件保存更改
+      if (onCityChange) {
+        onCityChange({
+          ...cityData,
+          regions: regions
+        });
+      }
     }
-    
+
     setEditingRegionId(null);
-  }, [editingRegionId, regions, validateRegion]);
+  }, [editingRegionId, regions, validateRegion, onCityChange, cityData]);
 
   // 取消编辑
   const cancelEditing = useCallback(() => {
@@ -342,12 +385,39 @@ const CityRegionEditor = ({
 
               {isDirty && (
                 <button
-                  onClick={() => {
-                    // 保存所有更改
+                  onClick={async () => {
+                    // 保存所有更改前，先同步FSA分组数据到区域
                     if (onCityChange) {
+                      // 为每个区域同步FSA分组数据
+                      const updatedRegions = await Promise.all(regions.map(async (region) => {
+                        try {
+                          const { getRegionFSAGroups } = await import('../../utils/unifiedStorage');
+                          const fsaGroups = await getRegionFSAGroups(region.id);
+
+                          // 从所有分组中汇总FSA
+                          const allFSAs = [];
+                          if (fsaGroups && Array.isArray(fsaGroups)) {
+                            fsaGroups.forEach(group => {
+                              if (group.fsaCodes && Array.isArray(group.fsaCodes)) {
+                                allFSAs.push(...group.fsaCodes);
+                              }
+                            });
+                          }
+
+                          return {
+                            ...region,
+                            fsaCodes: allFSAs,
+                            fsaGroups: fsaGroups
+                          };
+                        } catch (error) {
+                          console.error(`同步区域 ${region.id} FSA数据失败:`, error);
+                          return region;
+                        }
+                      }));
+
                       onCityChange({
                         ...cityData,
-                        regions: regions
+                        regions: updatedRegions
                       });
                       setIsDirty(false);
                     }
@@ -551,135 +621,39 @@ const CityRegionEditor = ({
                         </div>
                       </div>
 
-                      {/* FSA代码管理 */}
+                      {/* FSA分组管理 */}
                       <div className="mt-4">
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-sm font-medium text-gray-300">
-                            FSA代码配置
+                            FSA分组管理
                           </label>
 
                           {!isReadOnly && (
                             <div className="flex items-center gap-2">
-                              {region.fsaCodes.length === 0 && (
-                                <button
-                                  onClick={() => setShowFSASelector(
-                                    showFSASelector === region.id ? null : region.id
-                                  )}
-                                  className="text-sm text-blue-600 hover:text-blue-500 transition-colors"
-                                >
-                                  {showFSASelector === region.id ? '收起选择器' : '选择FSA'}
-                                </button>
-                              )}
-
                               {/* FSA组管理按钮 */}
-                              {region.fsaCodes.length > 0 && (
-                                <button
-                                  onClick={() => setShowFSAGroups(
-                                    showFSAGroups === region.id ? null : region.id
-                                  )}
-                                  className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors"
-                                >
-                                  <Users className="w-3 h-3" />
-                                  {showFSAGroups === region.id ? '收起分组' : 'FSA分组'}
-                                </button>
-                              )}
+                              <button
+                                onClick={() => setShowFSAGroups(
+                                  showFSAGroups === region.id ? null : region.id
+                                )}
+                                className="flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+                              >
+                                <Users className="w-3 h-3" />
+                                {showFSAGroups === region.id ? '收起分组' : '管理FSA分组'}
+                              </button>
                             </div>
                           )}
                         </div>
 
-                        {/* 当前选中的FSA - 简洁预览 */}
-                        {region.fsaCodes && region.fsaCodes.length > 0 ? (
-                          <div className="flex items-center gap-2">
-                            {/* 显示前3个FSA作为样本 */}
-                            <div className="flex flex-wrap gap-1">
-                              {region.fsaCodes.slice(0, 3).map(fsa => (
-                                <span
-                                  key={fsa}
-                                  className="inline-flex items-center px-2 py-0.5 bg-blue-900/30
-                                    text-blue-300 text-xs font-mono rounded border border-blue-700"
-                                >
-                                  {fsa}
-                                </span>
-                              ))}
-                              {region.fsaCodes.length > 3 && (
-                                <span className="text-xs text-gray-400 px-1">
-                                  +{region.fsaCodes.length - 3}
-                                </span>
-                              )}
-                            </div>
-                            
-                            {/* 查看更多/编辑按钮 */}
-                            {!isReadOnly && (
-                              <button
-                                onClick={() => setShowFSASelector(
-                                  showFSASelector === region.id ? null : region.id
-                                )}
-                                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                              >
-                                {showFSASelector === region.id ? '收起' : '查看全部'}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-gray-400 italic">
-                            未配置FSA代码
-                          </div>
-                        )}
-
-                        {/* FSA选择器和完整列表 */}
-                        <AnimatePresence>
-                          {showFSASelector === region.id && !isReadOnly && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.3 }}
-                              className="mt-3"
-                            >
-                              {/* 当前已选择的FSA完整列表（可删除） */}
-                              {region.fsaCodes && region.fsaCodes.length > 0 && (
-                                <div className="mb-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
-                                  <div className="text-xs text-gray-400 mb-2">已选择的FSA代码（点击删除）：</div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {region.fsaCodes.map(fsa => (
-                                      <span
-                                        key={fsa}
-                                        className="inline-flex items-center px-2 py-0.5 bg-blue-900/30
-                                          text-blue-300 text-xs font-mono rounded border border-blue-700
-                                          hover:bg-red-900/30 hover:border-red-700 hover:text-red-300
-                                          cursor-pointer transition-colors"
-                                        onClick={() => handleFSASelectionChange(
-                                          region.id,
-                                          region.fsaCodes.filter(f => f !== fsa)
-                                        )}
-                                        title="点击删除"
-                                      >
-                                        {fsa}
-                                        <X className="w-3 h-3 ml-1" />
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* FSA选择器 */}
-                              <FSASelector
-                                selectedFSAs={region.fsaCodes || []}
-                                onSelectionChange={(selectedFSAs) => 
-                                  handleFSASelectionChange(region.id, selectedFSAs)
-                                }
-                                currentCityId={cityData?.id}
-                                currentRegionId={region.id}
-                                usedFSAs={regions
-                                  .filter(r => r.id !== region.id)
-                                  .flatMap(r => r.fsaCodes || [])}
-                                className=""
-                              />
-                            </motion.div>
+                        {/* 汇总的FSA数量显示（从分组自动计算） */}
+                        <div className="text-sm text-gray-400">
+                          {region.fsaCodes && region.fsaCodes.length > 0 ? (
+                            <span>共 {region.fsaCodes.length} 个FSA（从分组汇总）</span>
+                          ) : (
+                            <span className="italic">暂无FSA分组，请点击"管理FSA分组"添加</span>
                           )}
-                        </AnimatePresence>
+                        </div>
 
-                        {/* FSA组管理 */}
+                        {/* FSA分组管理面板 */}
                         <AnimatePresence>
                           {showFSAGroups === region.id && (
                             <motion.div
@@ -692,12 +666,52 @@ const CityRegionEditor = ({
                                 region={{
                                   ...region,
                                   id: region.id,
-                                  fsaCodes: region.fsaCodes || []
+                                  fsaCodes: region.fsaCodes || [],
+                                  cityId: cityData?.id
                                 }}
+                                regionColor={region.displayColor || generateRegionColor(
+                                  region.level,
+                                  cityData?.themeColor || '#2196F3',
+                                  Math.max(regions.length, 4)
+                                )}
                                 fsaData={[]} // 如果有FSA详细数据可以传入
-                                onGroupsChange={() => {
+                                onGroupsChange={async () => {
                                   // 组变化后的处理
                                   console.log('FSA组已更新');
+
+                                  // 保存当前显示的区域ID，以便更新后保持选中状态
+                                  const currentShowFSAGroups = showFSAGroups;
+
+                                  // 重新加载FSA组并更新区域的fsaCodes
+                                  try {
+                                    const { getRegionFSAGroups } = await import('../../utils/unifiedStorage');
+                                    const updatedGroups = await getRegionFSAGroups(region.id);
+
+                                    // 从所有组中汇总FSA
+                                    const allFSAs = [];
+                                    if (updatedGroups && Array.isArray(updatedGroups)) {
+                                      updatedGroups.forEach(group => {
+                                        if (group.fsaCodes && Array.isArray(group.fsaCodes)) {
+                                          allFSAs.push(...group.fsaCodes);
+                                        }
+                                      });
+                                    }
+
+                                    // 更新区域的fsaCodes
+                                    updateRegion(region.id, {
+                                      fsaCodes: allFSAs,
+                                      fsaGroups: updatedGroups
+                                    });
+
+                                    // 保持当前区域的FSA组管理面板打开
+                                    if (currentShowFSAGroups === region.id) {
+                                      setTimeout(() => {
+                                        setShowFSAGroups(region.id);
+                                      }, 0);
+                                    }
+                                  } catch (error) {
+                                    console.error('更新区域FSA失败:', error);
+                                  }
                                 }}
                                 isReadOnly={isReadOnly}
                               />

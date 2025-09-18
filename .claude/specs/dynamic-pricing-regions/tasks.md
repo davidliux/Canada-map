@@ -20,7 +20,7 @@ Break down the implementation of region-based dynamic pricing into atomic, execu
   - Requirement: Story 1 - Region-based pricing storage
   - Leverage: Existing TRUCK_STORAGE_KEYS object
 
-- [ ] **Task 2**: Add region rules index key
+- [x] **Task 2**: Add region rules index key
   - Files: `src/types/truckDelivery.js`
   - Action: Add `REGION_RULES_INDEX: 'pricing_region_index'` to TRUCK_STORAGE_KEYS
   - Requirement: Story 1 - Region indexing for queries

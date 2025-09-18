@@ -4,7 +4,7 @@ require('dotenv').config();
 // PostgreSQL连接池配置
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5433,  // 使用5433端口
+  port: process.env.DB_PORT || 5432,  // 使用默认5432端口
   database: process.env.DB_NAME || 'canada_postal_system',
   user: process.env.DB_USER || process.env.USER,
   password: process.env.DB_PASSWORD || '',

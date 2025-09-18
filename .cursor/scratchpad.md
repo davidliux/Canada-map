@@ -827,7 +827,7 @@ class FSAStorageManager {
 ```
 
 #### **实时地图同步**:
-- `AccurateFSAMap`组件接收`deliverableFSAs`参数
+- `AccurateFSAMap`组件接收`completeFSAData`参数
 - FSA数据变更时自动重新渲染地图
 - 地图只显示当前可配送的FSA区域
 
@@ -928,7 +928,7 @@ R开头 → MB省    S开头 → SK省
 #### **1. 数据源革命性升级**
 - **之前**: 36个示例FSA数据
 - **现在**: **806个用户真实FSA数据** (来自用户提供的邮编.md)
-- **数据源**: 直接导入 `deliverableFSAs` 从 `src/data/deliverableFSA.js`
+- **数据源**: 直接导入 `completeFSAData` 从 `src/data/deliverableFSA.js`
 - **覆盖率**: 加拿大主要省份完整覆盖
 
 #### **2. 按省份分组显示**

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Package, MapPin, BarChart3, Truck } from 'lucide-react';
-import { getDeliveryStats, getFSAsByProvince } from '../data/deliverableFSA';
+import { getDeliveryStats, getFSAsByProvince } from '../data/canadaFSAData';
 
 const DeliveryStats = () => {
   const stats = getDeliveryStats();

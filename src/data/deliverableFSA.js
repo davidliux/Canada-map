@@ -166,11 +166,14 @@ export const deliverableFSAs = [
     return provinces;
   };
   
+  // 为了兼容性，同时导出completeFSAData作为别名
+  export const completeFSAData = deliverableFSAs;
+
   // 检查FSA是否可送达
   export const isDeliverable = (fsa) => {
     return deliverableFSAs.includes(fsa);
   };
-  
+
   // 获取统计信息
   export const getDeliveryStats = () => {
     const byProvince = getFSAsByProvince();

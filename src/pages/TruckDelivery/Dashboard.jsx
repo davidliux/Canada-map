@@ -2,29 +2,26 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import TruckDeliveryMap from '../../components/TruckDeliveryMap';
-import TruckDeliverySearch from '../../components/cities/TruckDeliverySearch';
 import { cityApi, zoneApi } from '../../services/truckDeliveryApi';
+import { completeFSAData } from '../../data/canadaFSAData';
+import { getRegionFSAGroups } from '../../utils/unifiedStorage';
+import FSAPricingPanelV2 from '../../components/FSAPricingPanelV2';
+import RegionColorLegend from '../../components/RegionColorLegend';
+
+// 新的Dashboard组件
+import CityListPanel from '../../components/dashboard/CityListPanel';
+import RegionTabs from '../../components/dashboard/RegionTabs';
+import DashboardErrorBoundary from '../../components/dashboard/DashboardErrorBoundary';
+import LoadingState from '../../components/dashboard/LoadingState';
+import EmptyState from '../../components/dashboard/EmptyState';
+
 import {
-  Truck,
-  Building2,
-  Package,
-  TrendingUp,
-  Activity,
-  Users,
-  BarChart3,
-  Zap,
-  MapPin,
-  DollarSign,
-  Clock,
   ArrowLeft,
-  Layers,
-  Filter,
-  ChevronDown,
-  Search,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Truck,
+  Activity
 } from 'lucide-react';
-import { deliverableFSAs } from '../../data/deliverableFSA';
 
 const TruckDeliveryDashboard = () => {
   const navigate = useNavigate();
@@ -38,16 +35,12 @@ const TruckDeliveryDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allConfiguredFSAs, setAllConfiguredFSAs] = useState([]); // 所有已配置的FSA
-  const [stats, setStats] = useState({
-    totalCities: 0,
-    totalRegions: 0,
-    totalFSAs: 0,
-    activeProvinces: 0,
-    coverageRate: 0,
-    dailyDeliveries: 0,
-    activeDrivers: 0,
-    avgDeliveryTime: 0
-  });
+  const [selectedRegion, setSelectedRegion] = useState(null); // 新增：选中的区域
+  const [regionFSAGroups, setRegionFSAGroups] = useState([]); // 区域的FSA分组
+  const [selectedGroup, setSelectedGroup] = useState(null); // 新增：选中的分组
+  const [pricingPanelOpen, setPricingPanelOpen] = useState(false);
+  const [selectedFSAForPricing, setSelectedFSAForPricing] = useState(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
   // 加载城市和区域数据
   useEffect(() => {
@@ -69,12 +62,46 @@ const TruckDeliveryDashboard = () => {
               // 获取城市详情，包含zones
               const cityDetail = await cityApi.getById(city.id);
               console.log(`城市 ${city.name} 详情:`, cityDetail);
+
+              // 对每个zone加载FSA分组数据
+              let processedZones = [];
+              if (cityDetail.zones && cityDetail.zones.length > 0) {
+                processedZones = await Promise.all(cityDetail.zones.map(async (zone) => {
+                  let calculatedFSAs = [];
+                  try {
+                    const groups = await getRegionFSAGroups(zone.id);
+                    if (groups && groups.length > 0) {
+                      const allFSAs = new Set();
+                      groups.forEach(group => {
+                        const fsaCodes = group.fsaCodes || [];
+                        fsaCodes.forEach(fsa => allFSAs.add(fsa));
+                      });
+                      calculatedFSAs = Array.from(allFSAs).sort();
+                      console.log(`区域 ${zone.name || zone.id} 从分组加载了 ${calculatedFSAs.length} 个FSA`);
+                    }
+                  } catch (err) {
+                    console.error(`加载区域 ${zone.name || zone.id} 的FSA分组失败:`, err);
+                  }
+
+                  // 使用计算出的FSA或原始数据
+                  const finalFSAs = calculatedFSAs.length > 0
+                    ? calculatedFSAs
+                    : (zone.fsaCodes || zone.fsa_codes || []);
+
+                  return {
+                    ...zone,
+                    fsaCodes: finalFSAs,
+                    fsa_codes: finalFSAs
+                  };
+                }));
+              }
+
               return {
                 ...city,
-                regions: cityDetail.zones || [],
-                totalRegions: cityDetail.zones?.length || 0,
-                totalFSAs: cityDetail.zones?.reduce((sum, zone) =>
-                  sum + (zone.fsa_codes?.length || zone.fsaCodes?.length || 0), 0) || 0
+                regions: processedZones,
+                totalRegions: processedZones.length,
+                totalFSAs: processedZones.reduce((sum, zone) =>
+                  sum + (zone.fsaCodes?.length || 0), 0)
               };
             } catch (err) {
               console.error(`获取城市 ${city.name} 详情失败:`, err);
@@ -89,14 +116,27 @@ const TruckDeliveryDashboard = () => {
         );
 
         console.log('处理后的城市数据:', citiesWithRegions);
-        setCities(citiesWithRegions);
+
+        // 规范化城市数据中的区域字段名（snake_case 转 camelCase）
+        const normalizedCities = citiesWithRegions.map(city => ({
+          ...city,
+          regions: (city.regions || []).map(region => ({
+            ...region,
+            // 确保使用camelCase的fsaCodes字段
+            fsaCodes: region.fsaCodes || region.fsa_codes || [],
+            // 保留原始的fsa_codes以保持兼容性
+            fsa_codes: region.fsa_codes || region.fsaCodes || []
+          }))
+        }));
+
+        setCities(normalizedCities);
 
         // 收集所有配置的FSA
         const configuredFSAs = [];
-        citiesWithRegions.forEach(city => {
+        normalizedCities.forEach(city => {
           if (city.regions && Array.isArray(city.regions)) {
             city.regions.forEach(region => {
-              const fsaCodes = region.fsaCodes || region.fsa_codes || [];
+              const fsaCodes = region.fsaCodes || [];
               if (fsaCodes && fsaCodes.length > 0) {
                 configuredFSAs.push(...fsaCodes);
               }
@@ -108,27 +148,7 @@ const TruckDeliveryDashboard = () => {
         setAllConfiguredFSAs(uniqueFSAs);
         console.log('配置的FSA总数:', uniqueFSAs.length, '部分FSA:', uniqueFSAs.slice(0, 10));
 
-        // 计算统计数据
-        const totalRegions = citiesWithRegions.reduce((sum, city) => sum + (city.totalRegions || 0), 0);
-        const totalFSAs = uniqueFSAs.length; // 使用实际配置的FSA数量
-        console.log(`统计: 总区域数=${totalRegions}, 总FSA数=${totalFSAs}`);
-        const provinces = new Set(citiesWithRegions.map(c => c.province));
-
-        // 计算覆盖率
-        const coverageRate = deliverableFSAs.length > 0
-          ? (totalFSAs / deliverableFSAs.length * 100).toFixed(1)
-          : 0;
-
-        setStats({
-          totalCities: citiesWithRegions.length,
-          totalRegions,
-          totalFSAs,
-          activeProvinces: provinces.size,
-          coverageRate: parseFloat(coverageRate),
-          dailyDeliveries: Math.floor(Math.random() * 2000) + 1000,
-          activeDrivers: Math.floor(Math.random() * 100) + 50,
-          avgDeliveryTime: (Math.random() * 2 + 1).toFixed(1)
-        });
+        // 移除了统计数据计算，因为不再需要StatsOverview
       } catch (err) {
         console.error('加载城市数据失败:', err);
         console.error('错误详情:', err.message, err.stack);
@@ -151,52 +171,140 @@ const TruckDeliveryDashboard = () => {
     };
 
     loadData();
-    const interval = setInterval(loadData, 60000); // 每60秒刷新
-    return () => clearInterval(interval);
   }, []);
 
   // 处理城市选择
-  const handleCitySelect = async (city) => {
-    console.log('选中城市:', city);
+  const handleCitySelect = async (city, skipHighlight = false, specificFSA = null) => {
+    console.log('选择城市:', city, '跳过高亮:', skipHighlight, '特定FSA:', specificFSA);
     setSelectedCity(city);
+    setSelectedRegion(null); // 重置选中的区域
+    setSelectedGroup(null); // 重置选中的分组
+    setRegionFSAGroups([]); // 重置FSA分组
 
     try {
+      let regions = [];
       // 从后端API加载该城市的区域数据
       if (city.regions && city.regions.length > 0) {
-        // 如果城市对象已经包含区域数据，直接使用
-        setCityRegions(city.regions);
+        // 如果城市对象已经包含区域数据，直接使用（已经在loadData中规范化过）
+        regions = city.regions;
+        setCityRegions(regions);
 
-        // 收集所有FSA用于高亮显示
-        const allFSAs = [];
-        city.regions.forEach(region => {
-          // 处理不同的字段名
-          const fsaCodes = region.fsaCodes || region.fsa_codes || region.fsaList || [];
-          if (fsaCodes && fsaCodes.length > 0) {
-            allFSAs.push(...fsaCodes);
-          }
-        });
-        console.log('高亮的FSA列表:', allFSAs);
-        setHighlightedFSAs(allFSAs);
+        // 如果有特定的FSA，只高亮该FSA并自动点击
+        if (specificFSA) {
+          console.log('高亮特实FSA:', specificFSA);
+          setHighlightedFSAs([specificFSA]);
+          // 自动触发FSA点击事件
+          setTimeout(() => {
+            handleFSAClick(specificFSA);
+          }, 500);
+        }
+        // 只有当不跳过高亮时，才收集所有FSA用于高亮显示
+        else if (!skipHighlight) {
+          const allFSAs = [];
+          regions.forEach(region => {
+            // 使用已规范化的fsaCodes字段
+            const fsaCodes = region.fsaCodes || [];
+            if (fsaCodes.length > 0) {
+              allFSAs.push(...fsaCodes);
+            }
+          });
+          console.log('高亮的FSA列表:', allFSAs);
+          setHighlightedFSAs(allFSAs);
+        }
       } else {
         // 如果没有区域数据，尝试从 API 获取
         const zones = await zoneApi.getByCityId(city.id);
-        setCityRegions(zones);
 
-        const allFSAs = [];
-        zones.forEach(zone => {
-          const fsaCodes = zone.fsa_codes || zone.fsaCodes || [];
-          if (fsaCodes && fsaCodes.length > 0) {
-            allFSAs.push(...fsaCodes);
+        // 规范化zone数据（snake_case 转 camelCase）并加载FSA分组
+        regions = await Promise.all(zones.map(async (zone) => {
+          // 尝试从FSA分组中获取实际的FSA列表
+          let calculatedFSAs = [];
+          try {
+            const groups = await getRegionFSAGroups(zone.id);
+            if (groups && groups.length > 0) {
+              const allFSAs = new Set();
+              groups.forEach(group => {
+                const fsaCodes = group.fsaCodes || [];
+                fsaCodes.forEach(fsa => allFSAs.add(fsa));
+              });
+              calculatedFSAs = Array.from(allFSAs).sort();
+              console.log(`区域 ${zone.name} 从分组加载了 ${calculatedFSAs.length} 个FSA`);
+            }
+          } catch (err) {
+            console.error(`加载区域 ${zone.name} 的FSA分组失败:`, err);
           }
-        });
-        console.log('高亮的FSA列表:', allFSAs);
-        setHighlightedFSAs(allFSAs);
+
+          // 如果从分组计算出了FSA，使用计算结果；否则使用原始数据
+          const finalFSAs = calculatedFSAs.length > 0
+            ? calculatedFSAs
+            : (zone.fsaCodes || zone.fsa_codes || []);
+
+          return {
+            ...zone,
+            fsaCodes: finalFSAs,
+            fsa_codes: finalFSAs
+          };
+        }));
+
+        setCityRegions(regions);
+
+        // 如果有特定的FSA，只高亮该FSA并自动点击
+        if (specificFSA) {
+          console.log('高亮特实FSA:', specificFSA);
+          setHighlightedFSAs([specificFSA]);
+          // 自动触发FSA点击事件
+          setTimeout(() => {
+            handleFSAClick(specificFSA);
+          }, 500);
+        }
+        // 只有当不跳过高亮时，才收集所有FSA用于高亮显示
+        else if (!skipHighlight) {
+          const allFSAs = [];
+          regions.forEach(region => {
+            const fsaCodes = region.fsaCodes || [];
+            if (fsaCodes.length > 0) {
+              allFSAs.push(...fsaCodes);
+            }
+          });
+          console.log('高亮的FSA列表:', allFSAs);
+          setHighlightedFSAs(allFSAs);
+        }
+      }
+
+      // 如果没有特定的FSA，且有区域，自动选择第一个区域并加载其FSA分组
+      if (!specificFSA && regions && regions.length > 0) {
+        // 对于每个区域，尝试加载其FSA分组并更新fsaCodes
+        for (const region of regions) {
+          try {
+            const groups = await getRegionFSAGroups(region.id);
+            if (groups && groups.length > 0) {
+              const fsaSet = new Set();
+              groups.forEach(group => {
+                const groupFSAs = group.fsaCodes || [];
+                groupFSAs.forEach(fsa => fsaSet.add(fsa));
+              });
+              const allFSAs = Array.from(fsaSet).sort();
+              if (allFSAs.length > 0) {
+                region.fsaCodes = allFSAs;
+                region.fsa_codes = allFSAs;
+                console.log(`区域 ${region.name} 从分组加载了 ${allFSAs.length} 个FSA`);
+              }
+            }
+          } catch (err) {
+            console.error(`加载区域 ${region.name} 的FSA分组失败:`, err);
+          }
+        }
+
+        // 选择第一个区域
+        const firstRegion = regions[0];
+        await handleRegionClick(firstRegion);
       }
     } catch (err) {
       console.error('加载城市区域数据失败:', err);
       console.error('错误详情:', err.message);
       setCityRegions([]);
       setHighlightedFSAs([]);
+      setRegionFSAGroups([]);
     }
   };
 
@@ -215,7 +323,7 @@ const TruckDeliveryDashboard = () => {
   // 处理搜索结果选择
   const handleSearchSelect = (suggestion) => {
     console.log('搜索选择:', suggestion);
-    
+
     if (suggestion.type === 'city') {
       handleCitySelect(suggestion.data);
     } else if (suggestion.type === 'fsa') {
@@ -239,80 +347,169 @@ const TruckDeliveryDashboard = () => {
     navigate(`/truck-delivery/city/${cityData.id}`);
   };
 
-  const statsCards = [
-    {
-      title: '服务城市',
-      value: stats.totalCities,
-      unit: '个',
-      icon: Building2,
-      color: 'from-blue-500 to-blue-600',
-      trend: '+2',
-      trendUp: true
-    },
-    {
-      title: '配送区域',
-      value: stats.totalRegions,
-      unit: '个',
-      icon: Layers,
-      color: 'from-green-500 to-green-600',
-      trend: '+5',
-      trendUp: true
-    },
-    {
-      title: 'FSA覆盖',
-      value: stats.totalFSAs,
-      unit: '个',
-      icon: MapPin,
-      color: 'from-purple-500 to-purple-600',
-      trend: '+12',
-      trendUp: true
-    },
-    {
-      title: '覆盖率',
-      value: stats.coverageRate,
-      unit: '%',
-      icon: TrendingUp,
-      color: 'from-orange-500 to-orange-600',
-      trend: '+3.2%',
-      trendUp: true
-    },
-    {
-      title: '今日配送',
-      value: stats.dailyDeliveries,
-      unit: '单',
-      icon: Package,
-      color: 'from-cyan-500 to-cyan-600',
-      trend: '+15%',
-      trendUp: true
-    },
-    {
-      title: '活跃司机',
-      value: stats.activeDrivers,
-      unit: '人',
-      icon: Users,
-      color: 'from-pink-500 to-pink-600',
-      trend: '+8',
-      trendUp: true
-    },
-    {
-      title: '平均时效',
-      value: stats.avgDeliveryTime,
-      unit: '小时',
-      icon: Clock,
-      color: 'from-indigo-500 to-indigo-600',
-      trend: '-0.3h',
-      trendUp: true
-    },
-    {
-      title: '系统状态',
-      value: '正常',
-      unit: '',
-      icon: Activity,
-      color: 'from-green-500 to-green-600',
-      trend: '99.9%',
-      trendUp: true
+  // 处理区域点击
+  const handleRegionClick = async (region) => {
+    // 重置分组选择
+    setSelectedGroup(null);
+
+    // 加载该区域的FSA分组
+    try {
+      const groups = await getRegionFSAGroups(region.id);
+      setRegionFSAGroups(groups || []);
+      console.log('区域FSA分组:', groups);
+
+      // 从分组中收集所有FSA
+      let allFSAs = [];
+      if (groups && groups.length > 0) {
+        const fsaSet = new Set();
+        groups.forEach(group => {
+          const groupFSAs = group.fsaCodes || [];
+          groupFSAs.forEach(fsa => fsaSet.add(fsa));
+        });
+        allFSAs = Array.from(fsaSet).sort();
+        console.log('从分组收集的FSA:', allFSAs.length, '个');
+      }
+
+      // 如果从分组中获取到FSA，更新region的fsaCodes
+      if (allFSAs.length > 0) {
+        region.fsaCodes = allFSAs;
+        region.fsa_codes = allFSAs;
+      }
+
+      // 高亮显示区域的所有FSA
+      const fsaCodes = allFSAs.length > 0 ? allFSAs : (region.fsaCodes || []);
+      setHighlightedFSAs(fsaCodes);
+
+    } catch (err) {
+      console.error('加载FSA分组失败:', err);
+      setRegionFSAGroups([]);
+      // 使用原有的FSA数据
+      const fsaCodes = region.fsaCodes || [];
+      setHighlightedFSAs(fsaCodes);
     }
-  ];
+
+    setSelectedRegion(region); // 设置选中的区域
+    console.log('区域点击，高亮FSA:', region.fsaCodes || []);
+  };
+
+  // 处理区域标签选择
+  const handleRegionTabSelect = (region) => {
+    setSelectedRegion(region);
+    handleRegionClick(region);
+  };
+
+  // 处理分组点击 - 只显示该分组的FSA
+  const handleGroupClick = (group, region) => {
+    if (selectedGroup?.id === group.id) {
+      // 如果点击已选中的分组，取消选择并显示整个区域的FSA
+      setSelectedGroup(null);
+      // 恢复显示区域的所有FSA
+      const allFSAs = region.fsaCodes || region.fsa_codes || [];
+      setHighlightedFSAs(allFSAs);
+      console.log('取消分组选择，显示所有FSA:', allFSAs.length);
+    } else {
+      // 选择新分组，只显示该分组的FSA
+      setSelectedGroup(group);
+      const groupFSAs = group.fsas || [];
+      setHighlightedFSAs(groupFSAs);
+      console.log('选择分组:', group.name, '显示FSA:', groupFSAs.length);
+    }
+  };
+
+  // 处理FSA点击
+  const handleFSAClick = (fsa, regionId = null) => {
+    // 高亮显示单个FSA
+    setHighlightedFSAs([fsa]);
+    console.log('FSA点击，高亮FSA:', fsa, '区域ID:', regionId);
+
+    // 更新价格查询面板的FSA
+    // 使用传入的regionId，如果没有则使用当前选中的区域
+    let actualRegionId = regionId || selectedRegion?.id;
+    let actualCityId = selectedCity?.id;
+    let needCitySwitch = false;
+    let targetCity = null;
+    let targetRegion = null;
+
+    // 如果没有regionId，尝试在当前城市的所有区域中查找
+    if (!actualRegionId && cityRegions.length > 0) {
+      for (const region of cityRegions) {
+        const fsaCodes = region.fsaCodes || [];
+        if (fsaCodes.includes(fsa)) {
+          actualRegionId = region.id;
+          targetRegion = region;
+          console.log('自动找到并选择区域:', region.name, region.id);
+          break;
+        }
+      }
+    }
+
+    // 如果还是没找到，在所有城市中查找
+    if (!actualRegionId && cities.length > 0) {
+      for (const city of cities) {
+        if (city.regions && Array.isArray(city.regions)) {
+          for (const region of city.regions) {
+            const fsaCodes = region.fsaCodes || [];
+            if (fsaCodes.includes(fsa)) {
+              actualRegionId = region.id;
+              actualCityId = city.id;
+              targetRegion = region;
+              // 如果找到的是其他城市的FSA，标记需要切换城市
+              if (city.id !== selectedCity?.id) {
+                console.log('FSA属于其他城市，需要切换到:', city.name);
+                needCitySwitch = true;
+                targetCity = city;
+              }
+              break;
+            }
+          }
+          if (actualRegionId) break;
+        }
+      }
+    }
+
+    // 如果需要切换城市，使用特殊处理避免高亮整个城市
+    if (needCitySwitch && targetCity) {
+      // 设置城市但不触发高亮所有FSA
+      setSelectedCity(targetCity);
+      // 只加载区域数据，不高亮
+      if (targetCity.regions && targetCity.regions.length > 0) {
+        setCityRegions(targetCity.regions);
+      }
+      // 保持只高亮点击的FSA
+      setHighlightedFSAs([fsa]);
+    }
+
+    // 设置选中的区域
+    if (targetRegion) {
+      setSelectedRegion(targetRegion);
+    }
+
+    // 如果找到了regionId或者有默认区域，显示价格面板
+    if (actualRegionId || cityRegions.length > 0) {
+      // 如果还是没有regionId，使用第一个区域作为默认
+      if (!actualRegionId && cityRegions.length > 0) {
+        actualRegionId = cityRegions[0].id;
+        setSelectedRegion(cityRegions[0]);
+        console.log('使用默认区域:', cityRegions[0].name);
+      }
+
+      // 确保有cityId
+      if (!actualCityId) {
+        actualCityId = selectedCity?.id || 'toronto';
+      }
+
+      setSelectedFSAForPricing({
+        fsaCode: fsa,
+        regionId: actualRegionId,
+        cityId: actualCityId
+      });
+      setPricingPanelOpen(true);
+      setIsPanelCollapsed(false); // 确保面板展开
+      console.log('显示价格查询面板 - FSA:', fsa, '区域ID:', actualRegionId, '城市ID:', actualCityId);
+    } else {
+      console.warn('无法显示价格查询面板：找不到区域信息');
+    }
+  };
 
   return (
     <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
@@ -340,7 +537,7 @@ const TruckDeliveryDashboard = () => {
               <div className="flex items-center space-x-3 bg-gray-700/50 px-4 py-2 rounded-lg">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: selectedCity.themeColor }}
+                  style={{ backgroundColor: selectedCity.themeColor || selectedCity.theme_color || '#60A5FA' }}
                 />
                 <span className="text-sm text-white">{selectedCity.name}</span>
                 <button
@@ -359,56 +556,13 @@ const TruckDeliveryDashboard = () => {
         </div>
       </div>
 
-      {/* 统计卡片 */}
-      <div className="px-6 py-4 bg-gray-800/50 backdrop-blur border-b border-gray-700">
-        <div className="grid grid-cols-8 gap-4">
-          {statsCards.map((card, index) => {
-            const Icon = card.icon;
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="relative overflow-hidden rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 p-4"
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 opacity-10">
-                  <div className={`w-full h-full bg-gradient-to-br ${card.color} rounded-full blur-2xl`} />
-                </div>
-                
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon className="w-5 h-5 text-gray-400" />
-                    {card.trend && (
-                      <span className={`text-xs ${card.trendUp ? 'text-green-400' : 'text-red-400'}`}>
-                        {card.trend}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-baseline space-x-1">
-                    <span className="text-2xl font-bold text-white">
-                      {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
-                    </span>
-                    {card.unit && (
-                      <span className="text-sm text-gray-400">{card.unit}</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{card.title}</p>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* 加载状态 */}
       {loading && (
-        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur flex items-center justify-center z-50">
-          <div className="flex flex-col items-center space-y-4">
-            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-            <span className="text-white text-lg">正在加载城市数据...</span>
-          </div>
-        </div>
+        <LoadingState
+          fullScreen
+          message="正在加载城市数据..."
+          submessage="请稍候，正在连接服务器"
+        />
       )}
 
       {/* 错误提示 */}
@@ -422,176 +576,114 @@ const TruckDeliveryDashboard = () => {
       )}
 
       {/* 主要内容区 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 左侧城市列表 */}
-        <div className="w-80 bg-gray-800 border-r border-gray-700 overflow-y-auto">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">城市网络</h2>
-              <span className="text-sm text-gray-400">{cities.length} 个城市</span>
-            </div>
-
-            {/* 搜索功能 */}
-            <div className="mb-4">
-              <TruckDeliverySearch
-                onSearch={handleSearch}
-                onSelect={handleSearchSelect}
-                onCityNavigation={handleCityNavigation}
-                searchHistory={searchHistory}
-                onHistoryUpdate={setSearchHistory}
-                className="w-full"
-                placeholder="搜索城市、FSA代码或邮编..."
-              />
-            </div>
-
-            {/* 城市筛选 */}
-            <div className="mb-4">
-              <select
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                onChange={(e) => {
-                  if (e.target.value) {
-                    const city = cities.find(c => c.id === e.target.value);
-                    if (city) handleCitySelect(city);
-                  } else {
-                    handleClearSelection();
-                  }
-                }}
-                value={selectedCity?.id || ''}
-              >
-                <option value="">全部城市</option>
-                {cities.map(city => (
-                  <option key={city.id} value={city.id}>{city.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 城市卡片列表 */}
-            <div className="space-y-3">
-              {cities.map((city) => (
-                <motion.div
-                  key={city.id}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={() => handleCitySelect(city)}
-                  className={`p-4 rounded-lg cursor-pointer transition-all ${
-                    selectedCity?.id === city.id
-                      ? 'bg-blue-900/30 border border-blue-600/50'
-                      : 'bg-gray-700/50 border border-gray-600/30 hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center"
-                        style={{ backgroundColor: city.themeColor + '20' }}
-                      >
-                        <Building2 className="w-5 h-5" style={{ color: city.themeColor }} />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-white">{city.name}</h3>
-                        <p className="text-xs text-gray-400">{city.province}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-gray-800/50 rounded px-2 py-1">
-                      <span className="text-gray-400">区域: </span>
-                      <span className="text-white font-medium">{city.totalRegions || city.regions?.length || 0}</span>
-                    </div>
-                    <div className="bg-gray-800/50 rounded px-2 py-1">
-                      <span className="text-gray-400">FSA: </span>
-                      <span className="text-white font-medium">{city.totalFSAs || 0}</span>
-                    </div>
-                  </div>
-
-                  {selectedCity?.id === city.id && cityRegions.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-600">
-                      <p className="text-xs text-gray-400 mb-2">配送区域等级</p>
-                      <div className="space-y-1">
-                        {cityRegions.map((region) => (
-                          <div key={region.id} className="flex items-center justify-between">
-                            <span className="text-xs text-gray-300">
-                              Level {region.level}: {region.name}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {(region.fsaCodes || region.fsa_codes || region.fsaList)?.length || 0} FSA
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
-          {/* 实时活动 */}
-          <div className="p-4 border-t border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-400 mb-3">实时活动</h3>
-            <div className="space-y-2">
-              {[
-                { type: 'delivery', text: '新订单已分配', time: '刚刚', color: 'bg-green-400' },
-                { type: 'update', text: '多伦多区域更新', time: '2分钟前', color: 'bg-blue-400' },
-                { type: 'alert', text: '温哥华配送延迟', time: '5分钟前', color: 'bg-yellow-400' },
-                { type: 'complete', text: '批量订单完成', time: '10分钟前', color: 'bg-purple-400' }
-              ].map((activity, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center space-x-3 p-2 bg-gray-700/30 rounded-lg"
-                >
-                  <div className={`w-2 h-2 rounded-full ${activity.color}`} />
-                  <div className="flex-1">
-                    <p className="text-xs text-white">{activity.text}</p>
-                    <p className="text-xs text-gray-500">{activity.time}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 地图区域 - 使用简化的卡车配送地图组件 */}
-        <div className="flex-1 relative bg-gray-900">
-          <TruckDeliveryMap
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 顶部区域标签导航 - 只在选中城市时显示 */}
+        {selectedCity && cityRegions.length > 0 && (
+          <RegionTabs
+            regions={cityRegions}
+            selectedRegion={selectedRegion}
+            selectedGroup={selectedGroup}
+            regionFSAGroups={regionFSAGroups}
+            onRegionSelect={handleRegionTabSelect}
+            onGroupClick={handleGroupClick}
+            onFSAClick={handleFSAClick}
             highlightedFSAs={highlightedFSAs}
-            cityView={selectedCity}
-            cityRegions={cityRegions} // 传递城市区域数据，包含颜色信息
-            allCities={cities} // 传递所有城市数据，用于全局视图颜色
-            searchQuery={searchQuery}
-            configuredFSAs={allConfiguredFSAs} // 传递所有配置的FSA
-            className="h-full"
           />
-          
-          {/* 地图图例 */}
-          {selectedCity && cityRegions.length > 0 && (
-            <div className="absolute bottom-4 left-4 bg-gray-800/95 backdrop-blur border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-white mb-2">区域图例</h3>
-              <div className="space-y-2">
-                {cityRegions.map((region, index) => {
-                  const colors = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'];
-                  return (
-                    <div key={region.id} className="flex items-center space-x-2">
-                      <div 
-                        className="w-4 h-4 rounded"
-                        style={{ backgroundColor: colors[index % colors.length] }}
-                      />
-                      <span className="text-xs text-gray-300">
-                        Level {region.level}: {region.name}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+        )}
+
+        {/* 内容区：左侧城市列表 + 地图 */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* 左侧城市列表面板 */}
+          <CityListPanel
+            cities={cities}
+            selectedCity={selectedCity}
+            onCitySelect={handleCitySelect}
+            isMobile={false}
+          />
+
+          {/* 地图区域 - 占据剩余所有空间 */}
+          <div className="flex-1 relative bg-gray-900">
+            <TruckDeliveryMap
+              highlightedFSAs={highlightedFSAs}
+              isGroupFiltered={!!selectedGroup} // 新增：标识是否在分组筛选模式
+              cityView={selectedCity}
+              cityRegions={cityRegions} // 传递城市区域数据，包含颜色信息
+              allCities={cities} // 传递所有城市数据，用于全局视图颜色
+              searchQuery={searchQuery}
+              configuredFSAs={allConfiguredFSAs} // 传递所有配置的FSA
+              onFSAClick={handleFSAClick} // 传递FSA点击事件处理函数
+              className="h-full w-full"
+            />
+
+            {/* 地图图例 - 显示在右下角 */}
+            {selectedCity && cityRegions.length > 0 ? (
+              <RegionColorLegend
+                regions={cityRegions}
+                className="absolute bottom-4 right-4 max-w-xs"
+              />
+            ) : !selectedCity && cities.length > 0 && (
+              // 全局视图时显示所有城市的区域
+              <RegionColorLegend
+                regions={(() => {
+                  // 收集所有城市的所有区域
+                  const allRegions = [];
+                  const regionMap = new Map();
+
+                  cities.forEach(city => {
+                    if (city.regions) {
+                      city.regions.forEach(region => {
+                        const key = region.name || region.zone_name || region.id;
+                        if (!regionMap.has(key)) {
+                          regionMap.set(key, {
+                            ...region,
+                            name: `${city.name} - ${region.name || region.zone_name || `区域${region.id}`}`,
+                            fsaCodes: region.fsaCodes || region.fsa_codes || []
+                          });
+                        }
+                      });
+                    }
+                  });
+
+                  return Array.from(regionMap.values()).slice(0, 8); // 最多显示8个区域
+                })()}
+                className="absolute bottom-4 right-4 max-w-xs"
+              />
+            )}
+          </div>
         </div>
       </div>
+
+      {/* FSA价格查询面板（左侧固定） */}
+      <FSAPricingPanelV2
+        isOpen={pricingPanelOpen}
+        onClose={() => {
+          setPricingPanelOpen(false);
+          setSelectedFSAForPricing(null);
+        }}
+        fsaCode={selectedFSAForPricing?.fsaCode}
+        regionId={selectedFSAForPricing?.regionId}
+        cityId={selectedFSAForPricing?.cityId}
+        isCollapsed={isPanelCollapsed}
+        onToggleCollapse={() => setIsPanelCollapsed(!isPanelCollapsed)}
+      />
     </div>
   );
 };
 
-export default TruckDeliveryDashboard;
+// 包装错误边界
+const TruckDeliveryDashboardWithErrorBoundary = () => {
+  return (
+    <DashboardErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('Dashboard错误:', error, errorInfo);
+      }}
+      onReset={() => {
+        window.location.reload();
+      }}
+    >
+      <TruckDeliveryDashboard />
+    </DashboardErrorBoundary>
+  );
+};
+
+export default TruckDeliveryDashboardWithErrorBoundary;

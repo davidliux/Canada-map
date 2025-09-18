@@ -239,17 +239,6 @@ const AnimatedSearchBox = ({
             className="flex-1 ml-3 bg-transparent text-white placeholder-gray-400 focus:outline-none text-lg font-medium"
           />
 
-          {/* 快捷键提示 */}
-          {!isFocused && !query && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center space-x-1 text-xs text-gray-500"
-            >
-              <span>Ctrl</span>
-              <span className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">K</span>
-            </motion.div>
-          )}
 
           {/* 清除按钮 */}
           <AnimatePresence>

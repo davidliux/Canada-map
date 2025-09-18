@@ -1,6 +1,6 @@
 // FSA数据验证和完整性检查工具
 
-import { deliverableFSAs } from '../data/deliverableFSA.js';
+import { completeFSAData } from '../data/canadaFSAData.js';
 
 /**
  * 验证FSA代码格式
@@ -19,7 +19,7 @@ export const validateFSAFormat = (fsa) => {
  */
 export const isFSADeliverable = (fsa) => {
   if (!validateFSAFormat(fsa)) return false;
-  return deliverableFSAs.includes(fsa.toUpperCase());
+  return completeFSAData.includes(fsa.toUpperCase());
 };
 
 /**
@@ -191,15 +191,15 @@ export const checkDeliveryCoverage = (geojsonData) => {
       .map(f => f.properties.CFSAUID)
   );
   
-  const covered = deliverableFSAs.filter(fsa => availableFSAs.has(fsa));
-  const missing = deliverableFSAs.filter(fsa => !availableFSAs.has(fsa));
+  const covered = completeFSAData.filter(fsa => availableFSAs.has(fsa));
+  const missing = completeFSAData.filter(fsa => !availableFSAs.has(fsa));
   
   return {
-    totalConfigured: deliverableFSAs.length,
+    totalConfigured: completeFSAData.length,
     covered: covered.length,
     missing: missing.length,
     missingFSAs: missing,
-    coverageRate: `${((covered.length / deliverableFSAs.length) * 100).toFixed(2)}%`
+    coverageRate: `${((covered.length / completeFSAData.length) * 100).toFixed(2)}%`
   };
 };
 

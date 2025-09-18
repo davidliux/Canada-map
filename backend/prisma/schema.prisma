@@ -309,6 +309,65 @@ model SkidPricing {
   @@map("skid_pricing")
 }
 
+model GroupSkidPricing {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cityId    String    @map("city_id") @db.VarChar(50)
+  zoneId    String    @map("zone_id") @db.VarChar(50)
+  groupId   String    @map("group_id") @db.VarChar(50)
+  skidCount Int       @map("skid_count")
+  price     Decimal   @map("price") @db.Decimal(10, 2)
+  currency  String?   @default("CAD") @db.VarChar(3)
+  isActive  Boolean?  @default(true) @map("is_active")
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.VarChar(100)
+
+  @@unique([cityId, zoneId, groupId, skidCount])
+  @@index([isActive], map: "idx_group_skid_pricing_active")
+  @@index([cityId], map: "idx_group_skid_pricing_city")
+  @@index([zoneId], map: "idx_group_skid_pricing_zone")
+  @@index([groupId], map: "idx_group_skid_pricing_group")
+  @@map("group_skid_pricing")
+}
+
+model PricingModes {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cityId       String         @map("city_id") @db.VarChar(50)
+  zoneId       String         @map("zone_id") @db.VarChar(50)
+  modeType     String         @map("mode_type") @db.VarChar(50)
+  config       Json           @map("config")
+  isActive     Boolean        @default(true) @map("is_active")
+  priority     Int            @default(0)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?        @map("created_by") @db.VarChar(100)
+  pricingRules PricingRules[]
+
+  @@unique([cityId, zoneId, modeType])
+  @@index([cityId], map: "idx_pricing_modes_city")
+  @@index([zoneId], map: "idx_pricing_modes_zone")
+  @@index([isActive], map: "idx_pricing_modes_active")
+  @@map("pricing_modes")
+}
+
+model PricingRules {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modeId         String       @map("mode_id") @db.Uuid
+  ruleType       String       @map("rule_type") @db.VarChar(50)
+  minQuantity    Int?         @map("min_quantity")
+  maxQuantity    Int?         @map("max_quantity")
+  price          Decimal?     @db.Decimal(10, 2)
+  pricePerUnit   Decimal?     @map("price_per_unit") @db.Decimal(10, 2)
+  discountPercent Decimal?    @map("discount_percent") @db.Decimal(5, 2)
+  sortOrder      Int          @default(0) @map("sort_order")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  pricingMode    PricingModes @relation(fields: [modeId], references: [id], onDelete: Cascade)
+
+  @@index([modeId], map: "idx_pricing_rules_mode")
+  @@index([ruleType], map: "idx_pricing_rules_type")
+  @@map("pricing_rules")
+}
+
 model ProviderSurcharge {
   id            String          @id @default(uuid()) @db.Uuid
   providerId    String          @map("provider_id") @db.Uuid
@@ -570,4 +629,55 @@ enum CalculationType {
   PER_UNIT
 
   @@map("calculation_type")
+}
+
+model TruckPricingConfigs {
+  id            String    @id @db.VarChar(255)
+  level         String    @db.VarChar(20)
+  targetId      String    @map("target_id") @db.VarChar(255)
+  targetName    String    @map("target_name") @db.VarChar(255)
+  mode          String    @db.VarChar(20)
+  config        Json      @db.JsonB
+  priority      Int       @default(0)
+  isActive      Boolean   @default(true) @map("is_active")
+  cityId        String?   @map("city_id") @db.VarChar(255)
+  effectiveDate DateTime? @map("effective_date") @db.Timestamptz(6)
+  expiryDate    DateTime? @map("expiry_date") @db.Timestamptz(6)
+  version       String    @default("1") @db.VarChar(20)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.VarChar(255)
+
+  @@index([cityId], map: "idx_pricing_configs_city")
+  @@index([level, targetId], map: "idx_pricing_configs_target")
+  @@index([priority], map: "idx_pricing_configs_priority")
+  @@index([isActive], map: "idx_pricing_configs_active")
+  @@index([effectiveDate, expiryDate], map: "idx_configs_effective")
+  @@index([level, targetId, isActive, priority], map: "idx_configs_composite")
+  @@map("truck_pricing_configs")
+}
+
+model PricingQueryLogs {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestParams Json     @map("request_params") @db.JsonB
+  responseData  Json     @map("response_data") @db.JsonB
+  queryTimeMs   Int      @map("query_time_ms")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  clientIp      String?  @map("client_ip") @db.VarChar(45)
+  userAgent     String?  @map("user_agent")
+
+  @@index([createdAt], map: "idx_query_logs_time")
+  @@index([clientIp], map: "idx_query_logs_client_ip")
+  @@map("pricing_query_logs")
+}
+
+model PricingCache {
+  cacheKey   String   @id @map("cache_key") @db.VarChar(255)
+  cacheValue Json     @map("cache_value") @db.JsonB
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "idx_cache_expires")
+  @@index([createdAt], map: "idx_cache_created")
+  @@map("pricing_cache")
 }

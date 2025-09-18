@@ -5,7 +5,7 @@ export const fsaStatistics = {
   // 总体统计
   total: {
     allFSAs: 1643,           // 加拿大总FSA数量
-    deliverableFSAs: 438,    // 我们可配送的FSA数量
+    completeFSAData: 438,    // 我们可配送的FSA数量
     coverage: 26.7,          // 覆盖率百分比
     lastUpdated: '2024-01-15'
   },
@@ -186,7 +186,7 @@ export const getProvinceName = (fsa) => {
 // 导出用于展示的汇总信息
 export const getDisplayStats = () => {
   return {
-    totalDeliverable: fsaStatistics.total.deliverableFSAs,
+    totalDeliverable: fsaStatistics.total.completeFSAData,
     totalCoverage: `${fsaStatistics.total.coverage}%`,
     topProvinces: Object.entries(fsaStatistics.byProvince)
       .sort((a, b) => b[1].deliverable - a[1].deliverable)

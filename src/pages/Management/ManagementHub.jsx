@@ -12,10 +12,7 @@ import {
   Shield,
   Zap,
   Users,
-  Target,
-  Building2,
-  FileText,
-  Calculator
+  Target
 } from 'lucide-react';
 
 const ManagementHub = () => {
@@ -26,7 +23,7 @@ const ManagementHub = () => {
     {
       id: 'fsa-management',
       title: 'FSA管理',
-      description: '管理FSA配送区域、价格配置和邮编管理',
+      description: '管理FSA配送区域和价格配置',
       icon: Package,
       color: 'from-gray-600 to-gray-700',
       category: 'FSA配送系统',
@@ -42,12 +39,6 @@ const ManagementHub = () => {
           icon: DollarSign,
           description: '设置区域价格策略',
           href: '/management/fsa/prices'
-        },
-        {
-          name: '邮编管理',
-          icon: Mail,
-          description: '管理邮编数据库',
-          href: '/management/fsa/postal-codes'
         }
       ],
       stats: {
@@ -59,7 +50,7 @@ const ManagementHub = () => {
     {
       id: 'truck-delivery-management',
       title: '卡车配送管理',
-      description: '管理城市配送、服务商、区域配置和价格策略',
+      description: '管理城市配送和区域配置',
       icon: Truck,
       color: 'from-gray-600 to-gray-700',
       category: '卡车配送系统',
@@ -71,33 +62,20 @@ const ManagementHub = () => {
           href: '/management/truck-delivery/cities'
         },
         {
-          name: '服务商管理',
-          icon: Building2,
-          description: '管理物流服务商',
-          href: '/management/truck-delivery/providers'
-        },
-        {
           name: '区域配置',
           icon: Target,
           description: '配置配送区域',
           href: '/management/truck-delivery/regions'
         },
         {
-          name: '价格策略',
+          name: '定价配置',
           icon: DollarSign,
-          description: '设置价格策略',
-          href: '/management/truck-delivery/pricing'
-        },
-        {
-          name: '动态定价',
-          icon: Calculator,
-          description: '管理动态定价规则',
-          href: '/management/truck-delivery/dynamic-pricing'
+          description: '配置板数定价策略',
+          href: '/management/truck-delivery/pricing-config'
         }
       ],
       stats: {
         cities: '25+',
-        providers: '10+',
         routes: '180+',
         status: '运行中'
       }
@@ -290,7 +268,7 @@ const ManagementHub = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <span className="text-xs text-gray-400">卡车配送：25+ 城市 | 10+ 服务商</span>
+                <span className="text-xs text-gray-400">卡车配送：25+ 城市 | 180+ 路线</span>
               </div>
             </div>
           </div>

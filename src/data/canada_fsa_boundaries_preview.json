@@ -154872,7 +154872,7 @@
     "title": "加拿大可配送FSA边界",
     "source": "Statistics Canada 2021 Census",
     "totalFSAs": 1643,
-    "deliverableFSAs": 438,
+    "completeFSAData": 438,
     "generatedAt": "2025-06-05T15:25:04.442Z",
     "simplified": true,
     "note": "这是简化版本，只包含前100个FSA用于测试"

@@ -44,12 +44,12 @@ const DeliveryAreaStatus = ({
     return unsubscribe;
   }, []);
 
-  const loadStats = async () => {
+  const loadStats = () => {
     setIsLoading(true);
     try {
       const deliveryStats = getDeliveryAreaStats();
       const deliveryFSAs = getAllDeliveryFSAs();
-      
+
       setStats({
         ...deliveryStats,
         totalDeliveryFSAs: deliveryFSAs.size,

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5001,
+    port: 5001,  // 匹配package.json中的端口设置
     open: true,
     strictPort: true,
     proxy: {

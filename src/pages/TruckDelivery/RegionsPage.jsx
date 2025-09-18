@@ -43,18 +43,29 @@ const RegionsPage = () => {
     }
   };
 
-  // 初始化和数据更新监听
+  // 初始化
   useEffect(() => {
     loadCities();
+  }, []);
 
+  // 数据更新监听
+  useEffect(() => {
     const unsubscribe = dataUpdateNotifier.subscribe((updateInfo) => {
-      if (updateInfo.type === 'city_updated' || updateInfo.type === 'city_deleted') {
-        loadCities();
+      if (updateInfo.type === 'city_updated') {
+        // 更新城市列表，并保持当前选择
+        loadCities(true);
+      } else if (updateInfo.type === 'city_deleted') {
+        // 如果删除的是当前选中的城市，需要重新选择
+        if (selectedCity && updateInfo.cityId === selectedCity.id) {
+          loadCities(false);  // 重置选择
+        } else {
+          loadCities(true);  // 保持当前选择
+        }
       }
     });
 
     return unsubscribe;
-  }, []);
+  }, [selectedCity]);
 
   // 处理城市选择
   const handleCitySelect = async (city) => {

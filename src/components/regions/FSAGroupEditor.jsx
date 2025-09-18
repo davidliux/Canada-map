@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, AlertCircle, Check } from 'lucide-react';
+import { X, Save, AlertCircle, Check, Plus, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   validateGroupName,
   detectFSAConflicts,
   suggestGroupName
 } from '../../utils/fsaGroupValidation';
+import { completeFSAData } from '../../data/canadaFSAData';
 
 /**
  * FSA组编辑器
@@ -42,6 +43,29 @@ const FSAGroupEditor = ({
 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [showFSAPicker, setShowFSAPicker] = useState(false);
+  const [fsaSearchQuery, setFsaSearchQuery] = useState('');
+
+  // 计算可用的FSA（从所有可配送FSA中排除已分组的）
+  const availableFSAs = useMemo(() => {
+    // 获取其他组已使用的FSA
+    const usedFSAs = new Set();
+    existingGroups.forEach(g => {
+      if (g.id !== group?.id) { // 排除当前正在编辑的组
+        g.fsaCodes?.forEach(fsa => usedFSAs.add(fsa));
+      }
+    });
+
+    // 从所有可配送FSA中排除已使用的
+    return completeFSAData.filter(fsa => !usedFSAs.has(fsa));
+  }, [existingGroups, group]);
+
+  // 过滤后的FSA列表
+  const filteredFSAs = useMemo(() => {
+    if (!fsaSearchQuery) return availableFSAs;
+    const query = fsaSearchQuery.toUpperCase();
+    return availableFSAs.filter(fsa => fsa.includes(query));
+  }, [availableFSAs, fsaSearchQuery]);
 
   // 处理FSA输入变化
   const handleFSAInputChange = (value) => {
@@ -216,7 +240,7 @@ const FSAGroupEditor = ({
           {/* FSA输入 */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-200 mb-2">
-              选择FSA ({formData.fsaCodes.length} 个)
+              选择FSA ({formData.fsaCodes.length} 个，可选{availableFSAs.length}个)
             </label>
 
             {errors.fsaCodes && (
@@ -226,18 +250,92 @@ const FSAGroupEditor = ({
               </div>
             )}
 
-            <textarea
-              value={formData.fsaInput}
-              onChange={(e) => handleFSAInputChange(e.target.value)}
-              className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-100 ${
-                errors.fsaCodes ? 'border-red-500' : 'border-gray-600'
-              }`}
-              placeholder="输入FSA代码，用逗号分隔（如：A1H, A1L, A1N, A1S, A1B, A1M, A0M）"
-              rows={4}
-            />
+            <div className="flex gap-2 mb-2">
+              <textarea
+                value={formData.fsaInput}
+                onChange={(e) => handleFSAInputChange(e.target.value)}
+                className={`flex-1 px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-100 ${
+                  errors.fsaCodes ? 'border-red-500' : 'border-gray-600'
+                }`}
+                placeholder="输入FSA代码，用逗号分隔（如：A1H, A1L, A1N, A1S, A1B, A1M, A0M）"
+                rows={3}
+              />
+              <button
+                type="button"
+                onClick={() => setShowFSAPicker(!showFSAPicker)}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors flex items-center gap-1"
+                title="从列表选择FSA"
+              >
+                <Plus className="w-4 h-4" />
+                选择
+              </button>
+            </div>
+
+            {/* FSA快速选择器 */}
+            {showFSAPicker && (
+              <div className="mt-2 p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={fsaSearchQuery}
+                    onChange={(e) => setFsaSearchQuery(e.target.value)}
+                    className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-sm text-gray-100"
+                    placeholder="搜索FSA..."
+                  />
+                  <span className="text-xs text-gray-400">
+                    {filteredFSAs.length} 个可用
+                  </span>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <div className="flex flex-wrap gap-1">
+                    {filteredFSAs.slice(0, 100).map(fsa => {
+                      const isSelected = formData.fsaCodes.includes(fsa);
+                      return (
+                        <button
+                          key={fsa}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              // 移除
+                              const newFSAs = formData.fsaCodes.filter(f => f !== fsa);
+                              setFormData(prev => ({
+                                ...prev,
+                                fsaCodes: newFSAs,
+                                fsaInput: newFSAs.join(', ')
+                              }));
+                            } else {
+                              // 添加
+                              const newFSAs = [...formData.fsaCodes, fsa].sort();
+                              setFormData(prev => ({
+                                ...prev,
+                                fsaCodes: newFSAs,
+                                fsaInput: newFSAs.join(', ')
+                              }));
+                            }
+                          }}
+                          className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                            isSelected
+                              ? 'bg-blue-900/50 text-blue-300 border-blue-600'
+                              : 'bg-gray-800 text-gray-400 border-gray-600 hover:bg-gray-700 hover:text-gray-300'
+                          }`}
+                        >
+                          {fsa}
+                        </button>
+                      );
+                    })}
+                    {filteredFSAs.length > 100 && (
+                      <span className="text-xs text-gray-500 px-2">
+                        +{filteredFSAs.length - 100} 更多...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <p className="mt-2 text-sm text-gray-400">
-              输入要包含在此组中的FSA代码，每个FSA只能属于一个组。支持用逗号、空格分隔。
+              输入或选择要包含在此组中的FSA代码，每个FSA只能属于一个组。
             </p>
 
           </div>

@@ -131,32 +131,110 @@ export const getRegionConfig = async (regionId) => {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(regionId);
 
     if (isUUID) {
-      // 对于卡车配送区域，直接从API获取
-      const { apiGet } = await import('./apiClient');
-      const zone = await apiGet(`/truck-delivery/zones/${regionId}`);
+      try {
+        // 对于卡车配送区域，尝试从API获取
+        const { apiGet } = await import('./apiClient');
+        const zone = await apiGet(`/truck-delivery/zones/${regionId}`);
 
-      // 转换为统一的区域配置格式
-      if (zone) {
-        // 转换fsa_groups格式（从snake_case到camelCase）
-        const fsaGroups = (zone.fsa_groups || []).map(group => ({
-          id: group.id,
-          name: group.name,
-          fsaCodes: group.fsa_codes || [],
-          customPricing: group.custom_pricing || null,
-          displayColor: group.display_color || null
-        }));
+        // 转换为统一的区域配置格式
+        if (zone) {
+          // 转换fsa_groups格式（从snake_case到camelCase）
+          const fsaGroups = (zone.fsa_groups || []).map(group => ({
+            id: group.id,
+            name: group.name,
+            fsaCodes: group.fsa_codes || [],
+            customPricing: group.custom_pricing || null,
+            displayColor: group.display_color || null
+          }));
 
+          // 优先使用zone直接的fsa_codes字段，如果不存在或为空，则从分组计算
+          let regionFSAs = [];
+
+          // 方法1：直接使用zone的fsa_codes字段
+          if (zone.fsa_codes && Array.isArray(zone.fsa_codes) && zone.fsa_codes.length > 0) {
+            regionFSAs = zone.fsa_codes;
+            console.log(`📊 区域 ${regionId} 使用直接FSA数据: ${regionFSAs.length} 个FSA`);
+          }
+          // 方法2：从fsa_groups计算
+          else if (fsaGroups && fsaGroups.length > 0) {
+            regionFSAs = calculateRegionFSAsFromGroups(fsaGroups);
+            if (regionFSAs.length > 0) {
+              console.log(`📊 区域 ${regionId} 从分组计算FSA: ${regionFSAs.length} 个FSA`);
+            } else {
+              console.warn(`⚠️ 区域 ${regionId} 的分组没有FSA数据`);
+            }
+          }
+          // 方法3：如果都没有数据，记录警告
+          else {
+            console.warn(`⚠️ 区域 ${regionId} 没有可用的FSA数据（既无直接数据也无分组数据）`);
+          }
+
+          const regionConfig = {
+            id: zone.id,
+            name: zone.name,
+            fsaCodes: regionFSAs, // 使用处理后的FSA列表
+            postalCodes: regionFSAs, // 兼容旧字段
+            fsaGroups: fsaGroups,
+            weightRanges: zone.weight_ranges || [],
+            customPricing: zone.custom_pricing || null,
+            level: zone.level,
+            cityId: zone.city_id,
+            displayColor: zone.color || zone.display_color
+          };
+
+          // 缓存成功的数据，供离线使用
+          try {
+            const cacheKey = `region_cache_${regionId}`;
+            localStorage.setItem(cacheKey, JSON.stringify(regionConfig));
+          } catch (e) {
+            console.warn('缓存区域数据失败:', e);
+          }
+
+          return regionConfig;
+        }
+      } catch (apiError) {
+        // API失败时，尝试从本地存储获取或创建默认配置
+        console.warn(`⚠️ API获取区域 ${regionId} 失败，使用本地备用方案:`, apiError.message);
+
+        // 尝试从localStorage获取缓存的数据
+        const cacheKey = `region_cache_${regionId}`;
+        const cachedData = localStorage.getItem(cacheKey);
+
+        if (cachedData) {
+          try {
+            const cached = JSON.parse(cachedData);
+            console.log(`📦 使用缓存的区域数据: ${cached.fsaCodes?.length || 0} 个FSA`);
+            return cached;
+          } catch (e) {
+            console.warn('缓存数据解析失败:', e);
+          }
+        }
+
+        // 尝试从storageService获取本地存储的数据
+        try {
+          const localRegion = await storageService.getRegion(regionId);
+          if (localRegion && localRegion.fsaCodes) {
+            console.log(`📦 使用本地存储的区域数据: ${localRegion.fsaCodes.length} 个FSA`);
+            return localRegion;
+          }
+        } catch (e) {
+          console.warn('本地存储获取失败:', e);
+        }
+
+        // 返回空的默认配置，但标记为需要同步
+        console.error(`❌ 区域 ${regionId} 无法获取任何数据，返回默认配置`);
         return {
-          id: zone.id,
-          name: zone.name,
-          fsaCodes: zone.fsa_codes || [],
-          postalCodes: zone.fsa_codes || [],
-          fsaGroups: fsaGroups,
-          weightRanges: zone.weight_ranges || [],
-          customPricing: zone.custom_pricing || null,
-          level: zone.level,
-          cityId: zone.city_id,
-          displayColor: zone.color || zone.display_color
+          id: regionId,
+          name: `区域 ${regionId}（数据待同步）`,
+          fsaCodes: [],
+          postalCodes: [],
+          fsaGroups: [],
+          weightRanges: [],
+          customPricing: null,
+          level: 1,
+          cityId: null,
+          displayColor: '#999999',
+          needsSync: true // 标记需要同步
         };
       }
       return null;
@@ -169,6 +247,16 @@ export const getRegionConfig = async (regionId) => {
     console.error(`获取区域 ${regionId} 配置失败:`, error);
     return null;
   }
+};
+
+/**
+ * 更新区域配置
+ * @param {string} regionId - 区域ID
+ * @param {UnifiedRegionConfig} config - 区域配置
+ * @returns {Promise<boolean>} 更新是否成功
+ */
+export const updateRegionConfig = async (regionId, config) => {
+  return await saveRegionConfig(regionId, config);
 };
 
 /**
@@ -198,10 +286,13 @@ export const saveRegionConfig = async (regionId, config) => {
       // 对于卡车配送区域，使用专门的API
       const { apiPut } = await import('./apiClient');
 
+      // 从分组自动计算FSA列表
+      const calculatedFSAs = calculateRegionFSAsFromGroups(config.fsaGroups || []);
+
       // 转换为API格式
       const zoneData = {
         name: config.name,
-        fsa_codes: config.fsaCodes || config.postalCodes || [],
+        fsa_codes: calculatedFSAs, // 使用从分组计算的FSA列表
         fsa_groups: config.fsaGroups || [],
         // weight_ranges 字段在数据库中不存在，不发送
         // custom_pricing 字段在数据库中不存在，不发送
@@ -277,10 +368,21 @@ export const deleteRegionConfig = (regionId) => {
  */
 export const getRegionFSAs = async (regionId) => {
   try {
+    console.log(`🔍 开始获取区域 ${regionId} 的FSA数据...`);
     const config = await getRegionConfig(regionId);
-    return config ? config.fsaCodes || [] : [];
+
+    if (!config) {
+      console.warn(`⚠️ 区域 ${regionId} 配置为空`);
+      return [];
+    }
+
+    const fsaCodes = config.fsaCodes || [];
+    console.log(`✅ 区域 ${regionId} FSA数据: ${fsaCodes.length} 个FSA`,
+      fsaCodes.length > 0 ? `前5个: ${fsaCodes.slice(0, 5).join(', ')}...` : '');
+
+    return fsaCodes;
   } catch (error) {
-    console.error(`获取区域 ${regionId} FSA失败:`, error);
+    console.error(`❌ 获取区域 ${regionId} FSA失败:`, error);
     return [];
   }
 };
@@ -488,6 +590,21 @@ const generateGroupColor = (baseColor = '#4F46E5', index = 0) => {
 };
 
 /**
+ * 从分组自动计算区域的FSA列表
+ * @param {Array} fsaGroups - FSA分组列表
+ * @returns {Array} 所有分组中的FSA去重后的列表
+ */
+export const calculateRegionFSAsFromGroups = (fsaGroups = []) => {
+  const allFSAs = new Set();
+  fsaGroups.forEach(group => {
+    if (group.fsaCodes && Array.isArray(group.fsaCodes)) {
+      group.fsaCodes.forEach(fsa => allFSAs.add(fsa));
+    }
+  });
+  return Array.from(allFSAs).sort();
+};
+
+/**
  * 创建新的FSA组
  * @param {string} regionId - 区域ID
  * @param {Object} groupData - 组数据
@@ -497,16 +614,34 @@ const generateGroupColor = (baseColor = '#4F46E5', index = 0) => {
  */
 export const createFSAGroup = async (regionId, groupData) => {
   try {
-    const config = await getRegionConfig(regionId);
+    let config = await getRegionConfig(regionId);
     if (!config) {
-      console.error(`区域 ${regionId} 不存在`);
-      return null;
+      // 如果区域不存在，创建一个新的区域配置
+      console.log(`区域 ${regionId} 不存在，创建新区域配置`);
+      config = {
+        id: regionId,
+        name: `区域 ${regionId}`,
+        fsaCodes: [],
+        postalCodes: [],
+        fsaGroups: [],
+        weightRanges: [],
+        customPricing: null,
+        isActive: true
+      };
+      // 保存新创建的区域配置
+      await updateRegionConfig(regionId, config);
     }
 
     // 初始化fsaGroups数组（如果不存在）
     if (!config.fsaGroups) {
       config.fsaGroups = [];
     }
+
+    // 确保每个现有组的fsaCodes字段是数组
+    config.fsaGroups = config.fsaGroups.map(g => ({
+      ...g,
+      fsaCodes: Array.isArray(g.fsaCodes) ? g.fsaCodes : []
+    }));
 
     // 验证组名称唯一性
     const nameExists = config.fsaGroups.some(g => g.name === groupData.name);
@@ -515,19 +650,20 @@ export const createFSAGroup = async (regionId, groupData) => {
       return null;
     }
 
-    // 对于卡车配送区域，暂时跳过FSA验证
-    // 因为FSA管理在城市级别，而不是区域级别
-    // TODO: 后续可以添加城市级别的FSA验证
     console.log(`创建FSA分组：${groupData.name}，包含 ${groupData.fsaCodes.length} 个FSA`);
 
     // 检查FSA是否已在其他组中
     const conflictingFSAs = [];
-    groupData.fsaCodes.forEach(fsa => {
-      const existingGroup = config.fsaGroups.find(g => g.fsaCodes.includes(fsa));
-      if (existingGroup) {
-        conflictingFSAs.push({ fsa, groupName: existingGroup.name });
-      }
-    });
+    if (Array.isArray(groupData.fsaCodes)) {
+      groupData.fsaCodes.forEach(fsa => {
+        const existingGroup = config.fsaGroups.find(g =>
+          Array.isArray(g.fsaCodes) && g.fsaCodes.includes(fsa)
+        );
+        if (existingGroup) {
+          conflictingFSAs.push({ fsa, groupName: existingGroup.name });
+        }
+      });
+    }
     if (conflictingFSAs.length > 0) {
       console.error('FSA冲突:', conflictingFSAs);
       return null;
@@ -551,6 +687,9 @@ export const createFSAGroup = async (regionId, groupData) => {
 
     // 添加到配置
     config.fsaGroups.push(newGroup);
+
+    // 自动更新区域的FSA列表（从所有分组汇总）
+    config.fsaCodes = calculateRegionFSAsFromGroups(config.fsaGroups);
     config.lastUpdated = new Date().toISOString();
 
     // 保存配置
@@ -558,7 +697,10 @@ export const createFSAGroup = async (regionId, groupData) => {
     if (success) {
       // 触发更新通知
       import('./dataUpdateNotifier').then(module => {
-        module.notifyRegionUpdate(regionId, 'groupCreate', { group: newGroup });
+        module.notifyRegionUpdate(regionId, 'groupCreate', {
+          group: newGroup,
+          regionFSAs: config.fsaCodes
+        });
       });
       return newGroup;
     }
@@ -604,14 +746,8 @@ export const updateFSAGroup = async (regionId, groupId, updates) => {
 
     // 如果更新FSA列表，验证冲突
     if (updates.fsaCodes) {
-      // 验证FSA属于区域
-      const invalidFSAs = updates.fsaCodes.filter(fsa => !config.fsaCodes.includes(fsa));
-      if (invalidFSAs.length > 0) {
-        console.error('以下FSA不属于该区域:', invalidFSAs);
-        return false;
-      }
-
-      // 检查与其他组的冲突
+      // 不再验证FSA是否属于区域，因为区域FSA是从分组汇总的
+      // 只检查与其他组的冲突
       const conflictingFSAs = [];
       updates.fsaCodes.forEach(fsa => {
         const existingGroup = config.fsaGroups.find(g => g.id !== groupId && g.fsaCodes.includes(fsa));
@@ -634,6 +770,9 @@ export const updateFSAGroup = async (regionId, groupId, updates) => {
         updatedAt: new Date().toISOString()
       }
     };
+
+    // 自动更新区域的FSA列表（从所有分组汇总）
+    config.fsaCodes = calculateRegionFSAsFromGroups(config.fsaGroups);
     config.lastUpdated = new Date().toISOString();
 
     // 保存配置
@@ -644,7 +783,8 @@ export const updateFSAGroup = async (regionId, groupId, updates) => {
         module.notifyRegionUpdate(regionId, 'groupUpdate', {
           groupId,
           updates,
-          group: config.fsaGroups[groupIndex]
+          group: config.fsaGroups[groupIndex],
+          regionFSAs: config.fsaCodes
         });
       });
       return true;
@@ -681,6 +821,9 @@ export const deleteFSAGroup = async (regionId, groupId) => {
 
     // 移除组
     config.fsaGroups.splice(groupIndex, 1);
+
+    // 自动更新区域的FSA列表（从所有分组汇总）
+    config.fsaCodes = calculateRegionFSAsFromGroups(config.fsaGroups);
     config.lastUpdated = new Date().toISOString();
 
     // 保存配置
@@ -690,7 +833,8 @@ export const deleteFSAGroup = async (regionId, groupId) => {
       import('./dataUpdateNotifier').then(module => {
         module.notifyRegionUpdate(regionId, 'groupDelete', {
           groupId,
-          deletedGroup
+          deletedGroup,
+          regionFSAs: config.fsaCodes
         });
       });
       return true;
@@ -711,7 +855,13 @@ export const deleteFSAGroup = async (regionId, groupId) => {
 export const getRegionFSAGroups = async (regionId) => {
   try {
     const config = await getRegionConfig(regionId);
-    return config?.fsaGroups || [];
+    const groups = config?.fsaGroups || [];
+
+    // 确保每个组的fsaCodes字段是数组
+    return groups.map(g => ({
+      ...g,
+      fsaCodes: Array.isArray(g.fsaCodes) ? g.fsaCodes : []
+    }));
   } catch (error) {
     console.error(`获取区域 ${regionId} FSA组失败:`, error);
     return [];

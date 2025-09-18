@@ -42,9 +42,12 @@ const FSAGroupItem = ({
 
   useEffect(() => {
     // 加载分组的自定义价格
-    if (group.customSkidPricing) {
+    if (group.customSkidPricing && Object.keys(group.customSkidPricing).length > 0) {
       setPrices(group.customSkidPricing);
       setHasCustomPrice(true);
+    } else {
+      setPrices({});
+      setHasCustomPrice(false);
     }
   }, [group]);
 
@@ -316,10 +319,11 @@ const FSAGroupPricingPanel = ({
       const groupsWithPricing = await Promise.all(
         groups.map(async (group) => {
           try {
-            const pricing = await pricingService.getGroupSkidPricing(cityId, zone.id, group.id);
+            // 使用group.name而不是group.id，因为后端使用名称作为标识
+            const pricingResult = await pricingService.getGroupSkidPricing(cityId, zone.id, group.name || group.id);
             return {
               ...group,
-              customSkidPricing: pricing
+              customSkidPricing: pricingResult ? pricingResult.prices : null
             };
           } catch (error) {
             return group;
@@ -340,7 +344,10 @@ const FSAGroupPricingPanel = ({
   const handleSaveGroupPrice = async (groupId, prices) => {
     try {
       setSaveStatus('saving');
-      await pricingService.saveGroupSkidPricing(cityId, zone.id, groupId, prices);
+      // 找到对应的分组，获取分组名称
+      const group = groups.find(g => g.id === groupId);
+      const groupIdentifier = group?.name || groupId;
+      await pricingService.saveGroupSkidPricing(cityId, zone.id, groupIdentifier, prices);
 
       // 更新本地状态
       setGroups(prev => prev.map(group =>
@@ -370,7 +377,10 @@ const FSAGroupPricingPanel = ({
   // 删除分组自定义价格
   const handleDeleteGroupPrice = async (groupId) => {
     try {
-      await pricingService.deleteGroupSkidPricing(cityId, zone.id, groupId);
+      // 找到对应的分组，获取分组名称
+      const group = groups.find(g => g.id === groupId);
+      const groupIdentifier = group?.name || groupId;
+      await pricingService.deleteGroupSkidPricing(cityId, zone.id, groupIdentifier);
 
       // 更新本地状态
       setGroups(prev => prev.map(group =>

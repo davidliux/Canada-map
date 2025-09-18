@@ -9,7 +9,7 @@ import {
   Building,
   Zap
 } from 'lucide-react';
-import { getFSAsByProvince } from '../data/deliverableFSA';
+import { getFSAsByProvince } from '../data/canadaFSAData';
 
 const FilterButtonGroup = ({ 
   onProvinceFilter, 
@@ -299,27 +299,6 @@ const FilterButtonGroup = ({
         </div>
       </div>
 
-      {/* 热门城市筛选 */}
-      <div className="space-y-3">
-        <div className="flex items-center space-x-2 text-sm text-gray-400">
-          <Building className="w-4 h-4" />
-          <span>热门城市</span>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {popularCities.map(city => (
-            <FilterButton
-              key={city.code}
-              id={city.code}
-              name={city.name}
-              color={city.color}
-              icon={Building}
-              type="city"
-              province={city.province}
-              onClick={(type, id) => handleFilterToggle(type, id, onCityFilter)}
-            />
-          ))}
-        </div>
-      </div>
 
       {/* 筛选状态指示器 */}
       <AnimatePresence>

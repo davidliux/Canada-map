@@ -24,7 +24,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/api/v1/health',
       regions: '/api/v1/regions',
-      calculatePrice: '/api/v1/calculate-price'
+      calculatePrice: '/api/v1/calculate-price',
+      pricingModes: '/api/v1/truck-delivery/pricing-modes'
     },
     documentation: '/api-docs',
     timestamp: new Date().toISOString()
@@ -51,9 +52,13 @@ app.use('/api/v1/providers', providerRoutes);
 const skidPricingRoutes = require('./routes/skidPricing');
 app.use('/api/v1/truck-delivery', skidPricingRoutes);
 
-// 添加定价配置路由
-const pricingRoutes = require('./routes/pricing');
-app.use('/api/v1', pricingRoutes);
+// 添加定价模式路由（新增的灵活定价策略）
+const pricingModesRoutes = require('./routes/pricingModes');
+app.use('/api/v1/truck-delivery', pricingModesRoutes);
+
+// 添加新的价格配置V2路由（支持四种定价模式）
+const truckPricingV2Routes = require('./routes/truckPricingV2');
+app.use('/api/v1/truck-pricing', truckPricingV2Routes);
 
 // Regions - read-only minimal
 app.get('/api/v1/regions', async (req, res, next) => {

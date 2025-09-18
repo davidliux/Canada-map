@@ -295,13 +295,13 @@ class TruckMapDataService {
    */
   async _getFSABoundaries(fsaCodes) {
     try {
-      // 首先尝试完整数据文件
-      let response = await fetch('/data/canada_fsa_boundaries_complete.json');
-      
+      // 使用新的完整FSA边界数据
+      let response = await fetch('/data/canada_fsa_boundaries.json');
+
       if (!response.ok) {
-        console.log('📋 完整FSA数据文件不存在，使用演示数据...');
-        // 降级到演示数据
-        response = await fetch('/data/canada_fsa_boundaries_demo.json');
+        console.log('📋 主数据文件不存在，使用备份数据...');
+        // 降级到备份数据
+        response = await fetch('/data/canada_fsa_boundaries_old_backup.json');
         
         if (!response.ok) {
           throw new Error(`演示FSA数据获取失败: ${response.status}`);

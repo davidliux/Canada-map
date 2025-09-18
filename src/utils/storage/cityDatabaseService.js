@@ -47,8 +47,11 @@ export class CityDatabaseService {
       }
 
       console.log('📥 从数据库获取城市列表...');
-      const response = await apiGet('/truck-delivery/cities');
-      
+      // 确保获取完整的zones数据以便正确计算区域数量
+      const response = await apiGet('/truck-delivery/cities', {
+        includeZones: 'true'
+      });
+
       // 处理包装的响应格式
       const serverCities = response?.data || response;
       
@@ -64,13 +67,13 @@ export class CityDatabaseService {
         // 返回城市列表（格式化）
         return serverCities.map(dbCity => {
           const formattedCity = this._formatCityData(dbCity);
-          // 使用数据库中的统计字段 (total_regions 和 total_fsas)
-          // 如果这些字段不存在，尝试从 regions 数组计算
-          const regionCount = parseInt(dbCity.total_regions) ||
-                            parseInt(dbCity.total_zones) ||
-                            formattedCity.regions?.length || 0;
-          const totalFSAs = parseInt(dbCity.total_fsas) ||
-                           formattedCity.regions?.reduce((sum, r) => sum + (r.fsaCodes?.length || 0), 0) || 0;
+          // 优先使用实际的 regions 数组长度，确保数据一致性
+          // 如果没有 regions 数组，再尝试使用统计字段
+          const regionCount = formattedCity.regions?.length ||
+                            parseInt(dbCity.total_regions) ||
+                            parseInt(dbCity.total_zones) || 0;
+          const totalFSAs = formattedCity.regions?.reduce((sum, r) => sum + (r.fsaCodes?.length || 0), 0) ||
+                           parseInt(dbCity.total_fsas) || 0;
 
           return {
             ...formattedCity,

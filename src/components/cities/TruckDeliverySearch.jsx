@@ -16,7 +16,7 @@ import {
   Layers
 } from 'lucide-react';
 import { cityStorageService } from '../../utils/storage/cityStorage.js';
-import { deliverableFSAs } from '../../data/deliverableFSA.js';
+import { completeFSAData } from '../../data/canadaFSAData.js';
 import { fsaStatistics } from '../../data/fsaStats.js';
 import { debouncedSearch, globalCache, performanceMonitor } from '../../utils/performanceOptimizer.js';
 
@@ -151,7 +151,7 @@ const TruckDeliverySearch = ({
 
       // 2. 搜索FSA代码
       const upperQuery = query.toUpperCase();
-      deliverableFSAs.forEach(fsa => {
+      completeFSAData.forEach(fsa => {
         if (fsa.includes(upperQuery)) {
           const cityName = fsaToCityNameMap.get(fsa) || '未分配城市';
           const cityInfo = citiesData.find(c => c.name === cityName);
@@ -185,7 +185,7 @@ const TruckDeliverySearch = ({
       // 3. 搜索完整邮编（模拟）
       if (query.length >= 6) {
         const fsaPrefix = query.substring(0, 3).toUpperCase();
-        if (deliverableFSAs.includes(fsaPrefix)) {
+        if (completeFSAData.includes(fsaPrefix)) {
           const cityName = fsaToCityNameMap.get(fsaPrefix) || '未分配城市';
           const cityInfo = citiesData.find(c => c.name === cityName);
           

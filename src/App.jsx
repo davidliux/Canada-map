@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useKeyboardShortcuts, createShortcuts } from './hooks/useKeyboardShortcuts';
 import { performanceMonitor } from './utils/performanceOptimizer';
 import compatLayer from './utils/unifiedStorageCompat'; // 导入兼容层
+import './setupRegionsRunner'; // 导入区域配置脚本
 
 function App() {
   // 初始化存储兼容层（仅在FSA系统页面）
